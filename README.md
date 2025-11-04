@@ -19,8 +19,8 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 ## Run In Your Phone
 
 ```bash
-lt --port 3000
+cloudflared tunnel --url http://localhost:3000  
 ```
 After that the local tunnel will provide a url. click that and get the password form the link.
-Which is inside the url. Example[https://loca.lt/mytunnelpassword](https://loca.lt/mytunnelpassword)
+Which is inside the url. Example[https://ear-quantities-seat.trycloudflare.com]
 
