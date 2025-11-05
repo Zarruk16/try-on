@@ -13,11 +13,12 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const modelRef = useRef<THREE.Group | null>(null); // Changed to Group for wrapper
-  const markerRef = useRef<THREE.Group | null>(null);
-  const hitTestSourceRef = useRef<XRHitTestSource | null>(null);
-  const hitTestSourceRequestedRef = useRef<boolean>(false);
-  const referenceSpaceRef = useRef<XRReferenceSpace | null>(null);
+  const modelRef = useRef<THREE.Group | null>(null); // Changed to Group for wrapper
+  const markerRef = useRef<THREE.Group | null>(null);
+  const hitTestSourceRef = useRef<XRHitTestSource | null>(null);
+  const hitTestSourceRequestedRef = useRef<boolean>(false);
+  const referenceSpaceRef = useRef<XRReferenceSpace | null>(null);
+  const hitTestReferenceSpaceRef = useRef<XRReferenceSpace | null>(null);
   const controllerRef = useRef<THREE.XRTargetRaySpace | null>(null);
   const [isARSupported, setIsARSupported] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -58,18 +59,21 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
         throw new Error('No supported reference space found');
       }
       
-      referenceSpaceRef.current = refSpace;
-  
-      try {
-        if (typeof session.requestHitTestSource === 'function') {
-          const source = await session.requestHitTestSource({
-            space: refSpace,
-          });
-          if (source) {
-            hitTestSourceRef.current = source;
-            hitTestSourceRequestedRef.current = true;
-          }
-        }
+      referenceSpaceRef.current = refSpace;
+
+      try {
+        if (typeof session.requestHitTestSource === 'function') {
+          // Prefer viewer space for hit testing on mobile AR
+          const viewerSpace = await session.requestReferenceSpace('viewer');
+          hitTestReferenceSpaceRef.current = viewerSpace;
+          const source = await session.requestHitTestSource({
+            space: viewerSpace,
+          });
+          if (source) {
+            hitTestSourceRef.current = source;
+            hitTestSourceRequestedRef.current = true;
+          }
+        }
       } catch (err) {
         console.error('Hit test source error:', err);
         setErrorMessage('Could not initialize hit testing.');
@@ -294,17 +298,17 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
       }
     }
 
-    const onXRFrame = (time: number, frame: XRFrame) => {
-      if (hitTestSourceRef.current && markerRef.current && referenceSpaceRef.current) {
-        const hitTestResults = frame.getHitTestResults(hitTestSourceRef.current);
-        if (hitTestResults.length > 0) {
-          const hit = hitTestResults[0];
-          const pose = hit.getPose(referenceSpaceRef.current);
-          if (pose) {
-            markerRef.current.visible = true;
-            markerRef.current.matrix.fromArray(pose.transform.matrix);
-            pulseAnimation();
-          }
+    const onXRFrame = (time: number, frame: XRFrame) => {
+      if (hitTestSourceRef.current && markerRef.current && hitTestReferenceSpaceRef.current) {
+        const hitTestResults = frame.getHitTestResults(hitTestSourceRef.current);
+        if (hitTestResults.length > 0) {
+          const hit = hitTestResults[0];
+          const pose = hit.getPose(hitTestReferenceSpaceRef.current);
+          if (pose) {
+            markerRef.current.visible = true;
+            markerRef.current.matrix.fromArray(pose.transform.matrix);
+            pulseAnimation();
+          }
         } else {
           markerRef.current.visible = false;
         }
