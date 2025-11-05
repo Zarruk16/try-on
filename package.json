@@ -11,6 +11,8 @@
     "generate-cert": "node scripts/generate-cert.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.922.0",
+    "@aws-sdk/s3-request-presigner": "^3.922.0",
     "@mediapipe/pose": "^0.5.1675469404",
     "@radix-ui/react-slot": "^1.2.3",
     "@react-three/drei": "^10.0.8",

@@ -4,10 +4,11 @@ import { GLTFLoader, OrbitControls } from 'three/examples/jsm/Addons.js';
 import { Button } from "@/components/ui/button";
 
 interface ArSceneProps {
-  isCameraFlipped?: boolean;
+  isCameraFlipped?: boolean;
+  modelUrl?: string;
 }
 
-export default function ArScene({ isCameraFlipped = false }: ArSceneProps) {
+export default function ArScene({ isCameraFlipped = false, modelUrl }: ArSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -85,9 +86,9 @@ export default function ArScene({ isCameraFlipped = false }: ArSceneProps) {
     }
   };
 
-  useEffect(() => {
-    // Check for WebXR support
-    if ('xr' in navigator) {
+  useEffect(() => {
+    // Check for WebXR support
+    if ('xr' in navigator) {
       navigator.xr?.isSessionSupported('immersive-ar').then((supported) => {
         setIsARSupported(supported);
         if (!supported) {
@@ -181,14 +182,22 @@ export default function ArScene({ isCameraFlipped = false }: ArSceneProps) {
     directionalLight.position.set(5, 5, 5);
     scene.add(directionalLight);
 
-    // Load 3D model
-    const loader = new GLTFLoader();
-    console.log('Starting to load model...');
-    loader.load(
-      '/model/sneaker.glb',
-      (gltf) => {
-        console.log('Model loaded, processing...');
-        const model = gltf.scene;
+    // Remove any previous model before loading a new one
+    if (modelRef.current) {
+      scene.remove(modelRef.current);
+      modelRef.current = null;
+    }
+
+    // Load 3D model
+    const loader = new GLTFLoader();
+    loader.setCrossOrigin('anonymous');
+    const url = modelUrl && modelUrl.trim().length > 0 ? modelUrl : '/model/sneaker.glb';
+    console.log('Starting to load model from URL:', url);
+    loader.load(
+      url,
+      (gltf) => {
+        console.log('Model loaded, processing...');
+        const model = gltf.scene;
 
         // --- FIX: Wrapper Group for Centering ---
         const wrapper = new THREE.Group();
@@ -332,8 +341,8 @@ export default function ArScene({ isCameraFlipped = false }: ArSceneProps) {
       cameraRef.current.aspect = width / height;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(width, height);
-    };
-    window.addEventListener('resize', handleResize);
+    };
+    window.addEventListener('resize', handleResize);
 
     // Cleanup
     return () => {
@@ -349,7 +358,7 @@ export default function ArScene({ isCameraFlipped = false }: ArSceneProps) {
       }
       rendererRef.current?.dispose();
     };
-  }, [isCameraFlipped, isARSupported]); // User's original dependencies
+  }, [isCameraFlipped, isARSupported, modelUrl]);
 
   return (
     <div 
