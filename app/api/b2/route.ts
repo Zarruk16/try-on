@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const prefix = url.searchParams.get('prefix') || '';
     const maxKeys = Number(url.searchParams.get('max')) || 50;
+    const origin = url.origin;
 
     const listRes = await s3.send(
       new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, MaxKeys: maxKeys })
@@ -43,8 +44,9 @@ export async function GET(req: NextRequest) {
     const signed = await Promise.all(
       items.map(async (i) => {
         const cmd = new GetObjectCommand({ Bucket: bucket, Key: i.key });
-        const url = await getSignedUrl(s3, cmd, { expiresIn: 60 * 15 }); // 15 minutes
-        return { ...i, url };
+        const url = await getSignedUrl(s3, cmd, { expiresIn: 60 * 60 }); // 60 minutes for mobile latency
+        const proxyUrl = `${origin}/api/b2/file?key=${encodeURIComponent(i.key)}`;
+        return { ...i, url, proxyUrl };
       })
     );
 

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader, OrbitControls } from 'three/examples/jsm/Addons.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Button } from "@/components/ui/button";
 
 interface ArSceneProps {
@@ -9,26 +12,29 @@ interface ArSceneProps {
 }
 
 export default function ArScene({ isCameraFlipped = false, modelUrl }: ArSceneProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const modelRef = useRef<THREE.Group | null>(null); // Changed to Group for wrapper
   const markerRef = useRef<THREE.Group | null>(null);
   const hitTestSourceRef = useRef<XRHitTestSource | null>(null);
   const hitTestSourceRequestedRef = useRef<boolean>(false);
   const referenceSpaceRef = useRef<XRReferenceSpace | null>(null);
   const hitTestReferenceSpaceRef = useRef<XRReferenceSpace | null>(null);
-  const controllerRef = useRef<THREE.XRTargetRaySpace | null>(null);
-  const [isARSupported, setIsARSupported] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string>('');
-  const [isARSessionActive, setIsARSessionActive] = useState<boolean>(false);
+  const hasPlacedRef = useRef<boolean>(false);
+  const [hasPlaced, setHasPlaced] = useState<boolean>(false);
+  const autoPlaceStartRef = useRef<number | null>(null);
+  const controllerRef = useRef<THREE.XRTargetRaySpace | null>(null);
+  const [isARSupported, setIsARSupported] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isARSessionActive, setIsARSessionActive] = useState<boolean>(false);
 
-  const startARSession = async () => {
-    if (!navigator.xr) {
-      setErrorMessage('WebXR not available.');
-      return;
-    }
+  const startARSession = async () => {
+    if (!navigator.xr) {
+      setErrorMessage('WebXR not available.');
+      return;
+    }
   
     try {
       const session = await navigator.xr.requestSession('immersive-ar', {
@@ -74,15 +80,15 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
             hitTestSourceRequestedRef.current = true;
           }
         }
-      } catch (err) {
-        console.error('Hit test source error:', err);
-        setErrorMessage('Could not initialize hit testing.');
-      }
-    } catch (err) {
-      console.error('Failed to start AR session:', err);
-      setErrorMessage('Could not start AR session.');
-    }
-  };
+      } catch (err) {
+        console.error('Hit test source error:', err);
+        setErrorMessage('Could not initialize hit testing.');
+      }
+    } catch (err) {
+      console.error('Failed to start AR session:', err);
+      setErrorMessage('Could not start AR session.');
+    }
+  };
 
   const stopARSession = () => {
     if (rendererRef.current) {
@@ -93,40 +99,41 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
   useEffect(() => {
     // Check for WebXR support
     if ('xr' in navigator) {
-      navigator.xr?.isSessionSupported('immersive-ar').then((supported) => {
-        setIsARSupported(supported);
-        if (!supported) {
-          setErrorMessage('AR is not supported on your device.');
-        }
-      }).catch((error) => {
-        console.error('Error checking AR support:', error);
-        setErrorMessage('Error checking AR support.');
-      });
-    } else {
-      setErrorMessage('WebXR is not supported in your browser.');
-    }
+      navigator.xr?.isSessionSupported('immersive-ar').then((supported) => {
+        setIsARSupported(supported);
+        if (!supported) {
+          setErrorMessage('AR is not supported on your device.');
+        }
+      }).catch((error) => {
+        console.error('Error checking AR support:', error);
+        setErrorMessage('Error checking AR support.');
+      });
+    } else {
+      setErrorMessage('WebXR is not supported in your browser.');
+    }
 
-    if (!containerRef.current) return;
+    if (!containerRef.current) return;
 
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
-    const container = containerRef.current;
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
 
-    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-    camera.position.z = 0.1;
-    cameraRef.current = camera;
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+    camera.position.z = 0.1;
+    cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true,
-      alpha: true
-    });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.xr.enabled = true;
-    container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.xr.enabled = true;
+    container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
 
     const controller = renderer.xr.getController(0);
     controller.addEventListener('select', onSelect);
@@ -179,12 +186,12 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
     scene.add(markerGroup);
     markerRef.current = markerGroup;
 
-    // Add lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
-    scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(5, 5, 5);
-    scene.add(directionalLight);
+    // Add lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5, 5, 5);
+    scene.add(directionalLight);
 
     // Remove any previous model before loading a new one
     if (modelRef.current) {
@@ -195,6 +202,12 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
     // Load 3D model
     const loader = new GLTFLoader();
     loader.setCrossOrigin('anonymous');
+    // Integrate Draco and Meshopt to speed up loading if the asset is encoded
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+    dracoLoader.setDecoderConfig({ type: 'js' });
+    loader.setDRACOLoader(dracoLoader);
+    loader.setMeshoptDecoder(MeshoptDecoder);
     const url = modelUrl && modelUrl.trim().length > 0 ? modelUrl : '/model/sneaker.glb';
     console.log('Starting to load model from URL:', url);
     loader.load(
@@ -220,76 +233,83 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
         modelRef.current = wrapper; // <-- Store the wrapper, not the model
         console.log('Model (wrapped) added to scene successfully');
 
-        // --- FIX: Race Condition Check ---
-        // Check if AR is ALREADY active when the model finishes loading
-        if (rendererRef.current?.xr.isPresenting) {
-          console.log('Model loaded during active AR session. Hiding.');
-          wrapper.visible = false;
-          wrapper.position.set(0, 0, -0.5); // "waiting" position
-        } else {
-          // If not in AR, show it for the main screen view
-          console.log('Model loaded in non-AR view. Showing.');
-          wrapper.visible = true;
-          wrapper.position.set(0, 0, 0); // Position for non-AR view
-          
-          // Only set camera if not in AR
-          camera.position.set(0, 0, 1);
-          camera.lookAt(wrapper.position); // Look at the wrapper's position
-        }
-      },
-      (progress) => {
-        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
-      },
-      (error) => {
-        console.error('Error loading model:', error);
-      }
-    );
+        // --- FIX: Race Condition Check ---
+        // Check if AR is ALREADY active when the model finishes loading
+        if (rendererRef.current?.xr.isPresenting) {
+          console.log('Model loaded during active AR session. Hiding.');
+          wrapper.visible = false;
+          wrapper.position.set(0, 0, -0.5); // "waiting" position
+        } else {
+          // If not in AR, show it for the main screen view
+          console.log('Model loaded in non-AR view. Showing.');
+          wrapper.visible = true;
+          wrapper.position.set(0, 0, 0); // Position for non-AR view
+          
+          // Only set camera if not in AR
+          camera.position.set(0, 0, 1);
+          camera.lookAt(wrapper.position); // Look at the wrapper's position
+        }
+      },
+      (progress) => {
+        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+      },
+      (error) => {
+        console.error('Error loading model:', error);
+      }
+    );
 
     // Handle AR session
-    renderer.xr.addEventListener('sessionstart', () => {
-      console.log('AR session started');
-      setIsARSessionActive(true);
-      hitTestSourceRequestedRef.current = false;
-      
-      if (modelRef.current) {
-        console.log('Resetting model for AR session');
-        modelRef.current.visible = false;
-        modelRef.current.position.set(0, 0, -0.5);
-      } else {
-        console.warn('Model not available during AR session start');
-      }
-    });
+    renderer.xr.addEventListener('sessionstart', () => {
+      console.log('AR session started');
+      setIsARSessionActive(true);
+      hitTestSourceRequestedRef.current = false;
+      hasPlacedRef.current = false;
+      setHasPlaced(false);
+      autoPlaceStartRef.current = null;
+      
+      if (modelRef.current) {
+        console.log('Resetting model for AR session');
+        modelRef.current.visible = false;
+        modelRef.current.position.set(0, 0, -0.5);
+      } else {
+        console.warn('Model not available during AR session start');
+      }
+    });
 
-    renderer.xr.addEventListener('sessionend', () => {
-      console.log('AR session ended');
-      setIsARSessionActive(false);
-      if (modelRef.current) {
-        modelRef.current.visible = true;
-        // Position for non-AR view
-        modelRef.current.position.set(0, 0, 0); 
-        modelRef.current.rotation.set(0, 0, 0);
-        camera.position.set(0, 0, 1);
-        camera.lookAt(modelRef.current.position);
-      }
-      if (markerRef.current) {
-        markerRef.current.visible = false;
-      }
-    });
+    renderer.xr.addEventListener('sessionend', () => {
+      console.log('AR session ended');
+      setIsARSessionActive(false);
+      hasPlacedRef.current = false;
+      setHasPlaced(false);
+      if (modelRef.current) {
+        modelRef.current.visible = true;
+        // Position for non-AR view
+        modelRef.current.position.set(0, 0, 0); 
+        modelRef.current.rotation.set(0, 0, 0);
+        camera.position.set(0, 0, 1);
+        camera.lookAt(modelRef.current.position);
+      }
+      if (markerRef.current) {
+        markerRef.current.visible = false;
+      }
+    });
 
-    function onSelect() {
-      console.log('Selection event triggered');
-      if (modelRef.current && markerRef.current?.visible) {
-        console.log('Placing model at marker position');
-        modelRef.current.position.copy(markerRef.current.position);
-        modelRef.current.quaternion.copy(markerRef.current.quaternion);
-        
-        modelRef.current.visible = true;
-        // modelRef.current.position.y += 0.05; // Optional: lift slightly
-        
-        console.log('Model placed at:', {
-          position: modelRef.current.position,
-          visible: modelRef.current.visible
-        });
+    function onSelect() {
+      console.log('Selection event triggered');
+      if (modelRef.current && markerRef.current?.visible) {
+        console.log('Placing model at marker position');
+        modelRef.current.position.copy(markerRef.current.position);
+        modelRef.current.quaternion.copy(markerRef.current.quaternion);
+        
+        modelRef.current.visible = true;
+        // modelRef.current.position.y += 0.05; // Optional: lift slightly
+        hasPlacedRef.current = true;
+        setHasPlaced(true);
+        
+        console.log('Model placed at:', {
+          position: modelRef.current.position,
+          visible: modelRef.current.visible
+        });
       } else {
         console.log('Cannot place model:', {
           modelExists: !!modelRef.current,
@@ -308,12 +328,26 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
             markerRef.current.visible = true;
             markerRef.current.matrix.fromArray(pose.transform.matrix);
             pulseAnimation();
+
+            // Auto-place after marker is visible for a short time
+            if (!hasPlacedRef.current && modelRef.current) {
+              if (autoPlaceStartRef.current == null) {
+                autoPlaceStartRef.current = time;
+              } else if (time - autoPlaceStartRef.current > 1200) {
+                modelRef.current.position.copy(markerRef.current.position);
+                modelRef.current.quaternion.copy(markerRef.current.quaternion);
+                modelRef.current.visible = true;
+                hasPlacedRef.current = true;
+                setHasPlaced(true);
+              }
+            }
           }
-        } else {
-          markerRef.current.visible = false;
-        }
-      }
-    };
+        } else {
+          markerRef.current.visible = false;
+          autoPlaceStartRef.current = null;
+        }
+      }
+    };
 
     // Add debug controls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -364,54 +398,70 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
     };
   }, [isCameraFlipped, isARSupported, modelUrl]);
 
-  return (
-    <div 
-      ref={containerRef} 
-      style={{ 
-        width: '100%', 
-        height: '100%',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        zIndex: 1,
-        overflow: 'hidden'
-      }}
-    >
-      {isARSupported && (
-        <div style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 2
-        }}>
-          <Button
-            onClick={isARSessionActive ? stopARSession : startARSession}
-            variant={isARSessionActive ? "destructive" : "default"}
-            size="lg"
-            className="px-8 py-6 text-lg font-semibold"
-          >
-            {isARSessionActive ? 'Stop AR' : 'Start AR'}
-          </Button>
-        </div>
-      )}
-      {errorMessage && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          color: 'white',
-          padding: '20px',
-          borderRadius: '10px',
-          textAlign: 'center',
-          maxWidth: '80%',
-          zIndex: 2
-        }}>
-          {errorMessage}
-        </div>
-      )}
-    </div>
-  );
+  return (
+    <div 
+      ref={containerRef} 
+      style={{ 
+        width: '100%', 
+        height: '100%',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        zIndex: 1,
+        overflow: 'hidden'
+      }}
+    >
+      {isARSupported && (
+        <div style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 2
+        }}>
+          <Button
+            onClick={isARSessionActive ? stopARSession : startARSession}
+            variant={isARSessionActive ? "destructive" : "default"}
+            size="lg"
+            className="px-8 py-6 text-lg font-semibold"
+          >
+            {isARSessionActive ? 'Stop AR' : 'Start AR'}
+          </Button>
+        </div>
+      )}
+      {isARSessionActive && !hasPlaced && (
+        <div style={{
+          position: 'absolute',
+          bottom: '80px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 2,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          color: 'white',
+          padding: '10px 16px',
+          borderRadius: '8px',
+          fontSize: '14px'
+        }}>
+          Move phone to find a surface. Tap to place.
+        </div>
+      )}
+      {errorMessage && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          color: 'white',
+          padding: '20px',
+          borderRadius: '10px',
+          textAlign: 'center',
+          maxWidth: '80%',
+          zIndex: 2
+        }}>
+          {errorMessage}
+        </div>
+      )}
+    </div>
+  );
 }

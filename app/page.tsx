@@ -24,7 +24,8 @@ export default function Home() {
         const items = await fetchB2Models();
         setB2Models(items);
         if (!modelUrl && items.length > 0) {
-          setModelUrl(items[0].url);
+          // Prefer proxy URL to avoid CORS/presign quirks on mobile
+          setModelUrl(items[0].proxyUrl || items[0].url);
         }
       } catch (e: any) {
         setError(e.message || 'Failed to load Backblaze models');
@@ -59,8 +60,8 @@ export default function Home() {
             b2Models.map((m) => (
               <button
                 key={m.key}
-                onClick={() => setModelUrl(m.url)}
-                className={`w-full text-left p-2 border-b hover:bg-gray-100 ${modelUrl === m.url ? 'bg-gray-200' : ''}`}
+                onClick={() => setModelUrl(m.proxyUrl || m.url)}
+                className={`w-full text-left p-2 border-b hover:bg-gray-100 ${modelUrl === (m.proxyUrl || m.url) ? 'bg-gray-200' : ''}`}
                 title={m.key}
               >
                 <div className="text-sm font-medium">{m.name}</div>
@@ -70,7 +71,7 @@ export default function Home() {
           )}
         </div>
         <div className="text-xs text-gray-600">
-          Models are presigned for temporary access. Refresh if expired.
+          Models load via a secure proxy to avoid mobile CORS issues.
         </div>
       </div>
     </main>

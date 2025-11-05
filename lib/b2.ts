@@ -2,6 +2,7 @@ export interface B2ModelItem {
   key: string;
   name: string;
   url: string;
+  proxyUrl: string;
   size: number;
   lastModified: string | null;
 }
