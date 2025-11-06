@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 interface ArSceneProps {
   isCameraFlipped?: boolean;
   modelUrl?: string;
+  placeOnDetection?: boolean;
+  onSessionChange?: (active: boolean) => void;
 }
 
-export default function ArScene({ isCameraFlipped = false, modelUrl }: ArSceneProps) {
+export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDetection = false, onSessionChange }: ArSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -43,9 +45,9 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
         domOverlay: { root: document.body },
       });
   
-      if (rendererRef.current) {
-        rendererRef.current.xr.setSession(session);
-      }
+      if (rendererRef.current) {
+        rendererRef.current.xr.setSession(session);
+      }
   
       // Try different reference spaces
       const referenceSpaceTypes = ['local-floor', 'bounded-floor', 'local', 'viewer'];
@@ -262,6 +264,7 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
     renderer.xr.addEventListener('sessionstart', () => {
       console.log('AR session started');
       setIsARSessionActive(true);
+      onSessionChange?.(true);
       hitTestSourceRequestedRef.current = false;
       hasPlacedRef.current = false;
       setHasPlaced(false);
@@ -279,6 +282,7 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
     renderer.xr.addEventListener('sessionend', () => {
       console.log('AR session ended');
       setIsARSessionActive(false);
+      onSessionChange?.(false);
       hasPlacedRef.current = false;
       setHasPlaced(false);
       if (modelRef.current) {
@@ -331,14 +335,23 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
 
             // Auto-place after marker is visible for a short time
             if (!hasPlacedRef.current && modelRef.current) {
-              if (autoPlaceStartRef.current == null) {
-                autoPlaceStartRef.current = time;
-              } else if (time - autoPlaceStartRef.current > 1200) {
+              // Immediate place if external detection requests it
+              if (placeOnDetection) {
                 modelRef.current.position.copy(markerRef.current.position);
                 modelRef.current.quaternion.copy(markerRef.current.quaternion);
                 modelRef.current.visible = true;
                 hasPlacedRef.current = true;
                 setHasPlaced(true);
+              } else {
+                if (autoPlaceStartRef.current == null) {
+                  autoPlaceStartRef.current = time;
+                } else if (time - autoPlaceStartRef.current > 1200) {
+                  modelRef.current.position.copy(markerRef.current.position);
+                  modelRef.current.quaternion.copy(markerRef.current.quaternion);
+                  modelRef.current.visible = true;
+                  hasPlacedRef.current = true;
+                  setHasPlaced(true);
+                }
               }
             }
           }
@@ -396,7 +409,7 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
       }
       rendererRef.current?.dispose();
     };
-  }, [isCameraFlipped, isARSupported, modelUrl]);
+  }, [isCameraFlipped, isARSupported, modelUrl, placeOnDetection]);
 
   return (
     <div 
@@ -407,7 +420,7 @@ export default function ArScene({ isCameraFlipped = false, modelUrl }: ArScenePr
         position: 'fixed',
         top: 0,
         left: 0,
-        zIndex: 1,
+        zIndex: 50,
         overflow: 'hidden'
       }}
     >
