@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
             value: '*',
           },
           {
+            key: 'Permissions-Policy',
+            value: 'camera=(self)'
+          },
+          {
             key: 'Cross-Origin-Opener-Policy',
             value: 'same-origin',
           },

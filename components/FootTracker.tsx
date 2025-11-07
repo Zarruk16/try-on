@@ -22,7 +22,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const [footDetected, setFootDetected] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
-
+  const [isMirrored, setIsMirrored] = useState(false);
   useEffect(() => {
     const videoEl = videoRef.current!;
     const canvasEl = canvasRef.current!;
@@ -34,7 +34,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
     let lastCanvasH = 0;
     let prevLeftVideo: { x: number; y: number } | null = null;
     let prevRightVideo: { x: number; y: number } | null = null;
-    let isMirrored = false;
+    // use state `isMirrored` for transforms
     const smooth = (prev: { x: number; y: number } | null, curr: { x: number; y: number } | null, alpha = 0.35) => {
       if (!curr) return prev ? { x: prev.x, y: prev.y } : null;
       if (!prev) return curr;
@@ -138,6 +138,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         { video: { facingMode: 'environment' }, audio: false },
         { video: { facingMode: { ideal: 'user' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } }, audio: false },
         { video: { facingMode: 'user' }, audio: false },
+        { video: true, audio: false },
       ];
 
       let stream: MediaStream | null = null;
@@ -170,7 +171,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
       const track = stream.getVideoTracks()[0];
       const facing = track.getSettings().facingMode;
-      isMirrored = facing !== 'environment';
+      setIsMirrored(facing !== 'environment');
       // Style the video to fill the screen like AR passthrough
       videoEl.style.position = 'absolute';
       videoEl.style.top = '0';
@@ -186,6 +187,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       try {
         await startVideo();
       } catch (e: any) {
+        // Log exact error for debugging
+        console.error('getUserMedia error:', e?.name, e?.message, e);
         // Gracefully render an error message on the canvas and stop
         const canvasW = fullScreen ? window.innerWidth : 320;
         const canvasH = fullScreen ? window.innerHeight : 240;
@@ -198,10 +201,20 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         ctx.font = '16px sans-serif';
         const msg = 'Camera access denied or unavailable';
         ctx.fillText(msg, 16, 30);
+        // Gather diagnostics
+        let devicesInfo = '';
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const cams = devices.filter(d => d.kind === 'videoinput');
+          devicesInfo = `Cameras detected: ${cams.length}${cams.length ? '' : ' (none found)'}`;
+        } catch {}
+        const secureInfo = `Secure context: ${window.isSecureContext ? 'yes' : 'no'}`;
+        const errName = e?.name ? `Error: ${e.name}` : '';
+        const errMsg = e?.message ? `Message: ${e.message}` : '';
         const reason = (e?.name === 'NotAllowedError' || /denied/i.test(e?.message || ''))
-          ? 'Camera permission denied. Please allow camera in browser settings.'
-          : 'Unable to access camera. Close other apps using the camera and retry.';
-        setCameraError(reason + (window.isSecureContext ? '' : ' Note: use HTTPS or localhost for camera access.'));
+          ? 'Camera permission denied. Check browser/site permissions and OS privacy settings.'
+          : (e?.name === 'NotFoundError' ? 'No camera device found.' : 'Unable to access camera. Close other apps using the camera and retry.');
+        setCameraError(`${reason}${window.isSecureContext ? '' : ' Note: use HTTPS or localhost for camera access.'}\n${devicesInfo}\n${secureInfo}\n${errName}${errMsg ? `\n${errMsg}` : ''}`);
         setFootDetected(false);
         return;
       }
@@ -281,13 +294,13 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
   return (
     <div
-      className={fullScreen ? undefined : "absolute top-4 right-4 z-10 bg-black/40 text-white rounded overflow-hidden"}
-      style={fullScreen ? { position: 'fixed', inset: 0, zIndex: 1, background: 'black' } : undefined}
+      className={fullScreen ? 'relative w-screen h-screen' : "absolute top-4 right-4 z-10 bg-black/40 text-white rounded overflow-hidden"}
+      style={fullScreen ? { position: 'fixed', inset: 0, zIndex: 1 } : undefined}
     >
-      <video ref={videoRef} className="hidden" playsInline />
+      <video ref={videoRef} playsInline style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: isMirrored ? 'scaleX(-1)' : 'none' }} />
       <canvas
         ref={canvasRef}
-        className={fullScreen ? "w-screen h-screen" : "w-[320px] h-[240px]"}
+        className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "w-[320px] h-[240px]"}
         style={fullScreen ? { display: 'block' } : undefined}
       />
       {cameraError && (
