@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import * as poseDetection from '@tensorflow-models/pose-detection';
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export interface AnkleCoords {
   left: { x: number; y: number } | null;
@@ -30,6 +32,11 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const missThreshold = 6; // frames before switching to crop mode
   const [detectMode, setDetectMode] = useState<'full' | 'crop'>('full');
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const webglCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const threeRendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const threeSceneRef = useRef<THREE.Scene | null>(null);
+  const threeCameraRef = useRef<THREE.OrthographicCamera | null>(null);
+  const shoeRef = useRef<THREE.Group | null>(null);
 
   useEffect(() => {
     const videoEl = videoRef.current!;
@@ -61,6 +68,63 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         canvasEl.height = canvasH;
         lastCanvasW = canvasW;
         lastCanvasH = canvasH;
+
+        // Init or resize three.js overlay to match canvas
+        const webglEl = webglCanvasRef.current!;
+        if (!threeRendererRef.current) {
+          const renderer = new THREE.WebGLRenderer({ canvas: webglEl, alpha: true, antialias: true });
+          renderer.setPixelRatio(window.devicePixelRatio);
+          renderer.setSize(canvasW, canvasH);
+          renderer.setClearColor(0x000000, 0);
+          threeRendererRef.current = renderer;
+
+          const scene = new THREE.Scene();
+          const ambient = new THREE.AmbientLight(0xffffff, 1.2);
+          scene.add(ambient);
+          const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+          dir.position.set(0, 0, 10);
+          scene.add(dir);
+          threeSceneRef.current = scene;
+
+          const cam = new THREE.OrthographicCamera(0, canvasW, canvasH, 0, -1000, 1000);
+          cam.position.set(canvasW / 2, canvasH / 2, 10);
+          cam.lookAt(new THREE.Vector3(canvasW / 2, canvasH / 2, 0));
+          threeCameraRef.current = cam;
+
+          // Load shoe model
+          const loader = new GLTFLoader();
+          const url = targetFoot === 'left'
+            ? '/model/left-foot-sneaker.glb'
+            : targetFoot === 'right'
+              ? '/model/right-foot-sneaker.glb'
+              : '/model/sneaker.glb';
+          loader.load(url, (gltf) => {
+            const wrapper = new THREE.Group();
+            const model = gltf.scene;
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.sub(center);
+            wrapper.add(model);
+            // Initial orientation: lay flat on screen plane
+            wrapper.rotation.set(Math.PI / 2, 0, 0);
+            // Base scale tuned for typical phone view
+            const baseScale = Math.min(canvasW, canvasH) * 0.12;
+            wrapper.scale.setScalar(baseScale / 1000);
+            wrapper.visible = false;
+            threeSceneRef.current!.add(wrapper);
+            shoeRef.current = wrapper;
+          });
+        } else {
+          threeRendererRef.current.setSize(canvasW, canvasH);
+          if (threeCameraRef.current) {
+            threeCameraRef.current.left = 0;
+            threeCameraRef.current.right = canvasW;
+            threeCameraRef.current.top = 0;
+            threeCameraRef.current.bottom = canvasH;
+            threeCameraRef.current.updateProjectionMatrix();
+            threeCameraRef.current.position.set(canvasW / 2, canvasH / 2, 10);
+          }
+        }
       }
 
       ctx.clearRect(0, 0, canvasW, canvasH);
@@ -137,6 +201,22 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
       const videoNorm = (p: { x: number; y: number } | null) => p ? { x: p.x / videoW, y: p.y / videoH } : null;
       onDetect({ left: videoNorm(leftVideoPx), right: videoNorm(rightVideoPx) });
+
+      // Update 3D shoe overlay position
+      if (threeRendererRef.current && threeSceneRef.current && threeCameraRef.current && shoeRef.current) {
+        const anchor = targetFoot === 'left' ? leftPx : targetFoot === 'right' ? rightPx : (leftPx || rightPx);
+        if (anchor) {
+          const model = shoeRef.current;
+          // Convert canvas Y to three ortho Y (same orientation since camera top=0, bottom=H)
+          model.position.set(anchor.x, anchor.y, 0);
+          model.visible = true;
+          // Heuristic orientation: mirror if front camera
+          model.scale.setScalar(Math.min(canvasW, canvasH) * 0.12 / 1000);
+        } else {
+          shoeRef.current.visible = false;
+        }
+        threeRendererRef.current.render(threeSceneRef.current, threeCameraRef.current);
+      }
 
       if (showHud) {
         ctx.font = '14px sans-serif';
@@ -318,6 +398,11 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       <canvas
         ref={canvasRef}
         className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "w-[320px] h-[240px]"}
+        style={fullScreen ? { display: 'block' } : undefined}
+      />
+      <canvas
+        ref={webglCanvasRef}
+        className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "hidden"}
         style={fullScreen ? { display: 'block' } : undefined}
       />
       {cameraError && (
