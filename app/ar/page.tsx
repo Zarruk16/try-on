@@ -34,7 +34,7 @@ export default function ARPage() {
 
   return (
     <main className="relative w-screen h-screen">
-      <ArScene modelUrl={modelUrl} onSessionChange={setIsARActive} />
+      <ArScene modelUrl={modelUrl} onSessionChange={setIsARActive} placeOnDetection />
 
       {!isARActive && (
         <div className="absolute top-4 left-4 bg-white/85 text-black p-4 rounded-md shadow z-10 w-[360px] space-y-3">

@@ -13,12 +13,15 @@ interface FootTrackerProps {
   fullScreen?: boolean;
   targetFoot?: TargetFoot; // focus detection on one ankle
   accuracy?: 'lite' | 'full'; // choose model size
+  showHud?: boolean; // show minimal HUD text overlay
 }
 
-export default function FootTracker({ onDetect, fullScreen = false, targetFoot = 'any', accuracy = 'full' }: FootTrackerProps) {
+export default function FootTracker({ onDetect, fullScreen = false, targetFoot = 'any', accuracy = 'full', showHud = false }: FootTrackerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [footDetected, setFootDetected] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     const videoEl = videoRef.current!;
@@ -27,35 +30,46 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
     let landmarker: PoseLandmarker | null = null;
     let running = false;
+    let lastCanvasW = 0;
+    let lastCanvasH = 0;
+    let prevLeftVideo: { x: number; y: number } | null = null;
+    let prevRightVideo: { x: number; y: number } | null = null;
+    let isMirrored = false;
+    const smooth = (prev: { x: number; y: number } | null, curr: { x: number; y: number } | null, alpha = 0.35) => {
+      if (!curr) return prev ? { x: prev.x, y: prev.y } : null;
+      if (!prev) return curr;
+      return { x: prev.x * (1 - alpha) + curr.x * alpha, y: prev.y * (1 - alpha) + curr.y * alpha };
+    };
 
     const drawOverlay = (landmarks: NormalizedLandmark[] | undefined) => {
       const videoW = videoEl.videoWidth;
       const videoH = videoEl.videoHeight;
 
-      // Choose canvas backing size: full screen or compact
+      // Use actual rendered size of canvas for precision
       const canvasW = fullScreen ? window.innerWidth : 320;
       const canvasH = fullScreen ? window.innerHeight : 240;
-      canvasEl.width = canvasW;
-      canvasEl.height = canvasH;
+      if (canvasW !== lastCanvasW || canvasH !== lastCanvasH) {
+        canvasEl.width = canvasW;
+        canvasEl.height = canvasH;
+        lastCanvasW = canvasW;
+        lastCanvasH = canvasH;
+      }
 
       ctx.clearRect(0, 0, canvasW, canvasH);
 
-      // Compute a center-crop (object-fit: cover) from source video
+      // Map landmarks to CSS object-fit: cover geometry
       const scale = Math.max(canvasW / videoW, canvasH / videoH);
-      const srcW = Math.floor(canvasW / scale);
-      const srcH = Math.floor(canvasH / scale);
-      const sx = Math.max(0, Math.floor((videoW - srcW) / 2));
-      const sy = Math.max(0, Math.floor((videoH - srcH) / 2));
+      const dispW = videoW * scale;
+      const dispH = videoH * scale;
+      const dx = (canvasW - dispW) / 2;
+      const dy = (canvasH - dispH) / 2;
 
-      ctx.save();
-      ctx.drawImage(videoEl, sx, sy, srcW, srcH, 0, 0, canvasW, canvasH);
-      ctx.restore();
-
-      // Helper to map video-space pixels into canvas-space after crop
-      const toCanvas = (vx: number, vy: number) => ({
-        x: ((vx - sx) * (canvasW / srcW)),
-        y: ((vy - sy) * (canvasH / srcH)),
-      });
+      const toCanvas = (vx: number, vy: number) => {
+        let x = dx + vx * scale;
+        const y = dy + vy * scale;
+        if (isMirrored) x = canvasW - x;
+        return { x, y };
+      };
 
       let leftVideoPx: { x: number; y: number } | null = null;
       let rightVideoPx: { x: number; y: number } | null = null;
@@ -67,6 +81,11 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         const right = landmarks[28];
         if (left) leftVideoPx = { x: left.x * videoW, y: left.y * videoH };
         if (right) rightVideoPx = { x: right.x * videoW, y: right.y * videoH };
+        // Smooth video-space positions to reduce flicker
+        leftVideoPx = smooth(prevLeftVideo, leftVideoPx);
+        rightVideoPx = smooth(prevRightVideo, rightVideoPx);
+        prevLeftVideo = leftVideoPx;
+        prevRightVideo = rightVideoPx;
         if (leftVideoPx) leftPx = toCanvas(leftVideoPx.x, leftVideoPx.y);
         if (rightVideoPx) rightPx = toCanvas(rightVideoPx.x, rightVideoPx.y);
       }
@@ -101,83 +120,153 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         right: rightVideoPx ? { x: rightVideoPx.x / videoW, y: rightVideoPx.y / videoH } : null,
       });
 
-      ctx.font = '16px sans-serif';
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(10, 10, 360, 30);
-      ctx.fillStyle = 'white';
-      const message = detected
-        ? (targetFoot === 'left' ? 'Left foot detected' : targetFoot === 'right' ? 'Right foot detected' : 'Foot detected')
-        : (targetFoot === 'left' ? 'Left foot not detected: adjust view' : targetFoot === 'right' ? 'Right foot not detected: adjust view' : 'Foot not detected: adjust view');
-      ctx.fillText(message, 16, 30);
-
-      // Guide frame overlay (only for full-screen mode)
-      if (fullScreen) {
-        const centerX = targetFoot === 'left' ? canvasW * 0.33 : targetFoot === 'right' ? canvasW * 0.67 : canvasW * 0.5;
-        const rectW = Math.min(canvasW * 0.5, 360);
-        const rectH = Math.min(canvasH * 0.28, 220);
-        const marginBottom = Math.min(80, canvasH * 0.1);
-        const rectX = Math.max(12, centerX - rectW / 2);
-        const rectY = canvasH - rectH - marginBottom;
-
-        // Subtle background tint inside the guide
-        ctx.fillStyle = 'rgba(0, 255, 136, 0.12)';
-        ctx.fillRect(rectX, rectY, rectW, rectH);
-
-        // Dashed border for the guide frame
-        ctx.save();
-        ctx.setLineDash([10, 8]);
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = '#00ff88';
-        ctx.strokeRect(rectX, rectY, rectW, rectH);
-        ctx.restore();
-
-        // Label text above the guide
-        const guideLabel = targetFoot === 'left' ? 'Place LEFT foot here' : targetFoot === 'right' ? 'Place RIGHT foot here' : 'Place foot here';
-        ctx.font = '18px sans-serif';
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        const labelW = Math.min(rectW, 260);
-        const labelX = Math.min(Math.max(rectX + (rectW - labelW) / 2, 12), canvasW - labelW - 12);
-        const labelY = Math.max(rectY - 36, 48);
-        ctx.fillRect(labelX, labelY - 24, labelW, 28);
+      if (showHud) {
+        ctx.font = '14px sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(10, 10, 260, 24);
         ctx.fillStyle = 'white';
-        ctx.fillText(guideLabel, labelX + 10, labelY - 6);
+        const message = detected
+          ? (targetFoot === 'left' ? 'Left foot detected' : targetFoot === 'right' ? 'Right foot detected' : 'Foot detected')
+          : (targetFoot === 'left' ? 'Left foot not detected' : targetFoot === 'right' ? 'Right foot not detected' : 'Foot not detected');
+        ctx.fillText(message, 16, 28);
       }
     };
 
     const startVideo = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false,
-      });
+      const constraintAttempts: MediaStreamConstraints[] = [
+        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } }, audio: false },
+        { video: { facingMode: 'environment' }, audio: false },
+        { video: { facingMode: { ideal: 'user' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } }, audio: false },
+        { video: { facingMode: 'user' }, audio: false },
+      ];
+
+      let stream: MediaStream | null = null;
+      for (const c of constraintAttempts) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(c);
+          break;
+        } catch (e) {
+          console.warn('getUserMedia failed for constraints', c, e);
+        }
+      }
+      if (!stream) throw new Error('Unable to access camera');
+
       videoEl.srcObject = stream;
+      videoEl.muted = true;
+      // playsInline attribute is already set in JSX; ensure property for Safari
+      (videoEl as any).playsInline = true;
       await videoEl.play();
+
+      // Wait for metadata so videoWidth/Height are available
+      if (!videoEl.videoWidth || !videoEl.videoHeight) {
+        await new Promise<void>((resolve) => {
+          const onMeta = () => {
+            videoEl.removeEventListener('loadedmetadata', onMeta);
+            resolve();
+          };
+          videoEl.addEventListener('loadedmetadata', onMeta, { once: true });
+        });
+      }
+
+      const track = stream.getVideoTracks()[0];
+      const facing = track.getSettings().facingMode;
+      isMirrored = facing !== 'environment';
+      // Style the video to fill the screen like AR passthrough
+      videoEl.style.position = 'absolute';
+      videoEl.style.top = '0';
+      videoEl.style.left = '0';
+      videoEl.style.width = '100%';
+      videoEl.style.height = '100%';
+      (videoEl.style as any).objectFit = 'cover';
+      videoEl.style.transform = isMirrored ? 'scaleX(-1)' : 'none';
     };
 
     const init = async () => {
-      await startVideo();
+      setCameraError(null);
+      try {
+        await startVideo();
+      } catch (e: any) {
+        // Gracefully render an error message on the canvas and stop
+        const canvasW = fullScreen ? window.innerWidth : 320;
+        const canvasH = fullScreen ? window.innerHeight : 240;
+        canvasEl.width = canvasW;
+        canvasEl.height = canvasH;
+        ctx.clearRect(0, 0, canvasW, canvasH);
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+        ctx.fillStyle = 'white';
+        ctx.font = '16px sans-serif';
+        const msg = 'Camera access denied or unavailable';
+        ctx.fillText(msg, 16, 30);
+        const reason = (e?.name === 'NotAllowedError' || /denied/i.test(e?.message || ''))
+          ? 'Camera permission denied. Please allow camera in browser settings.'
+          : 'Unable to access camera. Close other apps using the camera and retry.';
+        setCameraError(reason + (window.isSecureContext ? '' : ' Note: use HTTPS or localhost for camera access.'));
+        setFootDetected(false);
+        return;
+      }
       const vision = await FilesetResolver.forVisionTasks(
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
       );
-      landmarker = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            accuracy === 'lite'
-              ? 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
-              : 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
-        },
-        runningMode: 'VIDEO',
-      });
+      // Try GPU, fall back to CPU if not available
+      const baseOptions = {
+        modelAssetPath:
+          accuracy === 'lite'
+            ? 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
+            : 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+      } as any;
+      try {
+        landmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: { ...baseOptions, delegate: 'GPU' },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.4,
+          minPosePresenceConfidence: 0.4,
+          minTrackingConfidence: 0.4,
+        });
+      } catch (err) {
+        console.warn('GPU delegate failed, falling back to CPU', err);
+        landmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions,
+          runningMode: 'VIDEO',
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.4,
+          minPosePresenceConfidence: 0.4,
+          minTrackingConfidence: 0.4,
+        });
+      }
       running = true;
-
-      const loop = () => {
+      const rafLoop = () => {
         if (!running || !landmarker) return;
         const ts = performance.now();
         const res = landmarker.detectForVideo(videoEl, ts);
         const person = res.landmarks?.[0] as NormalizedLandmark[] | undefined;
         drawOverlay(person);
-        requestAnimationFrame(loop);
+        requestAnimationFrame(rafLoop);
       };
-      requestAnimationFrame(loop);
+
+      const rVFC = (videoEl as any).requestVideoFrameCallback as
+        | ((cb: (now: number, metadata: { mediaTime: number }) => void) => void)
+        | undefined;
+
+      if (typeof rVFC === 'function') {
+        const onFrame = (_now: number, metadata: { mediaTime: number }) => {
+          if (!running || !landmarker) return;
+          if (!videoEl.videoWidth || !videoEl.videoHeight) {
+            // Wait until we have dimensions
+            rVFC(onFrame);
+            return;
+          }
+          const ts = metadata?.mediaTime ? metadata.mediaTime * 1000 : performance.now();
+          const res = landmarker.detectForVideo(videoEl, ts);
+          const person = res.landmarks?.[0] as NormalizedLandmark[] | undefined;
+          drawOverlay(person);
+          rVFC(onFrame);
+        };
+        rVFC(onFrame);
+      } else {
+        requestAnimationFrame(rafLoop);
+      }
     };
 
     init();
@@ -188,7 +277,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       const stream = videoEl.srcObject as MediaStream | null;
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, [onDetect]);
+  }, [onDetect, fullScreen, targetFoot, accuracy, retryToken]);
 
   return (
     <div
@@ -201,6 +290,28 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         className={fullScreen ? "w-screen h-screen" : "w-[320px] h-[240px]"}
         style={fullScreen ? { display: 'block' } : undefined}
       />
+      {cameraError && (
+        <div className="fixed inset-x-0 bottom-6 mx-auto w-[92%] max-w-xl z-20 bg-white/95 text-black shadow rounded p-4 space-y-3">
+          <div className="font-semibold">Camera access required</div>
+          <div className="text-sm">{cameraError}</div>
+          <div className="flex items-center gap-3">
+            <button
+              className="px-4 py-2 bg-black text-white rounded"
+              onClick={() => setRetryToken((t) => t + 1)}
+            >
+              Retry camera
+            </button>
+            <a
+              href="https://support.google.com/chrome/answer/114662?hl=en"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm underline"
+            >
+              How to allow camera
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
