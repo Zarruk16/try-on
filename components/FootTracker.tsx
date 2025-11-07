@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
-import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
+import * as poseDetection from '@tensorflow-models/pose-detection';
+import * as tf from '@tensorflow/tfjs-core';
+import '@tensorflow/tfjs-backend-webgl';
 
 export interface AnkleCoords {
   left: { x: number; y: number } | null;
@@ -11,41 +13,47 @@ type TargetFoot = 'left' | 'right' | 'any';
 interface FootTrackerProps {
   onDetect: (ankles: AnkleCoords) => void;
   fullScreen?: boolean;
-  targetFoot?: TargetFoot; // focus detection on one ankle
-  accuracy?: 'lite' | 'full'; // choose model size
-  showHud?: boolean; // show minimal HUD text overlay
+  targetFoot?: TargetFoot;
+  accuracy?: 'lite' | 'full' | 'heavy';
+  showHud?: boolean;
 }
 
 export default function FootTracker({ onDetect, fullScreen = false, targetFoot = 'any', accuracy = 'full', showHud = false }: FootTrackerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [footDetected, setFootDetected] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
   const [isMirrored, setIsMirrored] = useState(false);
+  const zoomFactor = 1.10; // slight zoom-in to match AR view
+  const missThreshold = 6; // frames before switching to crop mode
+  const [detectMode, setDetectMode] = useState<'full' | 'crop'>('full');
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+
   useEffect(() => {
     const videoEl = videoRef.current!;
     const canvasEl = canvasRef.current!;
+    const containerEl = containerRef.current!;
     const ctx = canvasEl.getContext('2d')!;
 
-    let landmarker: PoseLandmarker | null = null;
+    let detector: poseDetection.PoseDetector | null = null;
     let running = false;
     let lastCanvasW = 0;
     let lastCanvasH = 0;
     let prevLeftVideo: { x: number; y: number } | null = null;
     let prevRightVideo: { x: number; y: number } | null = null;
-    // use state `isMirrored` for transforms
-    const smooth = (prev: { x: number; y: number } | null, curr: { x: number; y: number } | null, alpha = 0.35) => {
+    const smooth = (prev: { x: number; y: number } | null, curr: { x: number; y: number } | null, alpha = 0.5) => {
       if (!curr) return prev ? { x: prev.x, y: prev.y } : null;
       if (!prev) return curr;
       return { x: prev.x * (1 - alpha) + curr.x * alpha, y: prev.y * (1 - alpha) + curr.y * alpha };
     };
+    let lastDetectTime = performance.now();
 
-    const drawOverlay = (landmarks: NormalizedLandmark[] | undefined) => {
+    const drawOverlay = (poses: poseDetection.Pose[] | null) => {
       const videoW = videoEl.videoWidth;
       const videoH = videoEl.videoHeight;
 
-      // Use actual rendered size of canvas for precision
       const canvasW = fullScreen ? window.innerWidth : 320;
       const canvasH = fullScreen ? window.innerHeight : 240;
       if (canvasW !== lastCanvasW || canvasH !== lastCanvasH) {
@@ -57,8 +65,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
       ctx.clearRect(0, 0, canvasW, canvasH);
 
-      // Map landmarks to CSS object-fit: cover geometry
-      const scale = Math.max(canvasW / videoW, canvasH / videoH);
+      const coverScale = Math.max(canvasW / videoW, canvasH / videoH);
+      const scale = coverScale * zoomFactor;
       const dispW = videoW * scale;
       const dispH = videoH * scale;
       const dx = (canvasW - dispW) / 2;
@@ -76,12 +84,13 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       let leftPx: { x: number; y: number } | null = null;
       let rightPx: { x: number; y: number } | null = null;
 
-      if (landmarks && landmarks.length >= 29) {
-        const left = landmarks[27];
-        const right = landmarks[28];
-        if (left) leftVideoPx = { x: left.x * videoW, y: left.y * videoH };
-        if (right) rightVideoPx = { x: right.x * videoW, y: right.y * videoH };
-        // Smooth video-space positions to reduce flicker
+      const first = poses?.[0];
+      if (first?.keypoints) {
+        const left = first.keypoints.find(k => (k.name || (k as any).part) === 'left_ankle');
+        const right = first.keypoints.find(k => (k.name || (k as any).part) === 'right_ankle');
+        if (left && (left.score ?? 0) > 0.2) leftVideoPx = { x: left.x, y: left.y };
+        if (right && (right.score ?? 0) > 0.2) rightVideoPx = { x: right.x, y: right.y };
+
         leftVideoPx = smooth(prevLeftVideo, leftVideoPx);
         rightVideoPx = smooth(prevRightVideo, rightVideoPx);
         prevLeftVideo = leftVideoPx;
@@ -90,59 +99,68 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         if (rightVideoPx) rightPx = toCanvas(rightVideoPx.x, rightVideoPx.y);
       }
 
-      // Apply target foot filtering
       if (targetFoot === 'left') {
         rightPx = null;
       } else if (targetFoot === 'right') {
         leftPx = null;
       }
 
-      ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.lineWidth = 2;
+      // Draw guidance sign if not detected
+      const detected = !!leftPx || !!rightPx;
+      setFootDetected(detected);
+      if (!detected) {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+        ctx.fillStyle = 'white';
+        ctx.font = '18px sans-serif';
+        const msg = 'Place lower legs in view • step back • good lighting';
+        const tw = ctx.measureText(msg).width;
+        ctx.fillText(msg, (canvasW - tw) / 2, canvasH * 0.5);
+      }
+
+      // Draw ankle markers
+      ctx.fillStyle = detected ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)'; // green/red
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 3;
       if (leftPx) {
         ctx.beginPath();
-        ctx.arc(leftPx.x, leftPx.y, 10, 0, Math.PI * 2);
+        ctx.arc(leftPx.x, leftPx.y, 14, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       }
       if (rightPx) {
         ctx.beginPath();
-        ctx.arc(rightPx.x, rightPx.y, 10, 0, Math.PI * 2);
+        ctx.arc(rightPx.x, rightPx.y, 14, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       }
 
-      const detected = !!leftPx || !!rightPx;
-      setFootDetected(detected);
-      onDetect({
-        left: leftVideoPx ? { x: leftVideoPx.x / videoW, y: leftVideoPx.y / videoH } : null,
-        right: rightVideoPx ? { x: rightVideoPx.x / videoW, y: rightVideoPx.y / videoH } : null,
-      });
+      const videoNorm = (p: { x: number; y: number } | null) => p ? { x: p.x / videoW, y: p.y / videoH } : null;
+      onDetect({ left: videoNorm(leftVideoPx), right: videoNorm(rightVideoPx) });
 
       if (showHud) {
         ctx.font = '14px sans-serif';
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.fillRect(10, 10, 260, 24);
+        ctx.fillRect(10, 10, 320, 24);
         ctx.fillStyle = 'white';
+        const since = performance.now() - lastDetectTime;
         const message = detected
           ? (targetFoot === 'left' ? 'Left foot detected' : targetFoot === 'right' ? 'Right foot detected' : 'Foot detected')
-          : (targetFoot === 'left' ? 'Left foot not detected' : targetFoot === 'right' ? 'Right foot not detected' : 'Foot not detected');
+          : (since > 2000 ? 'Tips: include lower legs, step back, improve lighting' : 'Foot not detected');
         ctx.fillText(message, 16, 28);
       }
     };
 
     const startVideo = async () => {
-      const constraintAttempts: MediaStreamConstraints[] = [
+      const attempts: MediaStreamConstraints[] = [
         { video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } }, audio: false },
         { video: { facingMode: 'environment' }, audio: false },
         { video: { facingMode: { ideal: 'user' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } }, audio: false },
         { video: { facingMode: 'user' }, audio: false },
         { video: true, audio: false },
       ];
-
       let stream: MediaStream | null = null;
-      for (const c of constraintAttempts) {
+      for (const c of attempts) {
         try {
           stream = await navigator.mediaDevices.getUserMedia(c);
           break;
@@ -154,17 +172,11 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
       videoEl.srcObject = stream;
       videoEl.muted = true;
-      // playsInline attribute is already set in JSX; ensure property for Safari
       (videoEl as any).playsInline = true;
       await videoEl.play();
-
-      // Wait for metadata so videoWidth/Height are available
       if (!videoEl.videoWidth || !videoEl.videoHeight) {
         await new Promise<void>((resolve) => {
-          const onMeta = () => {
-            videoEl.removeEventListener('loadedmetadata', onMeta);
-            resolve();
-          };
+          const onMeta = () => { videoEl.removeEventListener('loadedmetadata', onMeta); resolve(); };
           videoEl.addEventListener('loadedmetadata', onMeta, { once: true });
         });
       }
@@ -172,7 +184,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       const track = stream.getVideoTracks()[0];
       const facing = track.getSettings().facingMode;
       setIsMirrored(facing !== 'environment');
-      // Style the video to fill the screen like AR passthrough
+      // Style video and canvas; apply consistent zoom via container
+      containerEl.style.transform = `scale(${zoomFactor})`;
+      containerEl.style.transformOrigin = 'center center';
       videoEl.style.position = 'absolute';
       videoEl.style.top = '0';
       videoEl.style.left = '0';
@@ -187,9 +201,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       try {
         await startVideo();
       } catch (e: any) {
-        // Log exact error for debugging
         console.error('getUserMedia error:', e?.name, e?.message, e);
-        // Gracefully render an error message on the canvas and stop
         const canvasW = fullScreen ? window.innerWidth : 320;
         const canvasH = fullScreen ? window.innerHeight : 240;
         canvasEl.width = canvasW;
@@ -201,7 +213,6 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         ctx.font = '16px sans-serif';
         const msg = 'Camera access denied or unavailable';
         ctx.fillText(msg, 16, 30);
-        // Gather diagnostics
         let devicesInfo = '';
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
@@ -218,82 +229,88 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         setFootDetected(false);
         return;
       }
-      const vision = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
-      );
-      // Try GPU, fall back to CPU if not available
-      const baseOptions = {
-        modelAssetPath:
-          accuracy === 'lite'
-            ? 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
-            : 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
-      } as any;
-      try {
-        landmarker = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions: { ...baseOptions, delegate: 'GPU' },
-          runningMode: 'VIDEO',
-          numPoses: 1,
-          minPoseDetectionConfidence: 0.4,
-          minPosePresenceConfidence: 0.4,
-          minTrackingConfidence: 0.4,
-        });
-      } catch (err) {
-        console.warn('GPU delegate failed, falling back to CPU', err);
-        landmarker = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions,
-          runningMode: 'VIDEO',
-          numPoses: 1,
-          minPoseDetectionConfidence: 0.4,
-          minPosePresenceConfidence: 0.4,
-          minTrackingConfidence: 0.4,
-        });
-      }
+
+      await tf.setBackend('webgl');
+      await tf.ready();
+      // Prefer Thunder for accuracy; allow MultiPose Lightning fallback when needed
+      const mt = accuracy === 'lite'
+        ? (poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING)
+        : (poseDetection.movenet.modelType.SINGLEPOSE_THUNDER);
+      detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+        modelType: mt,
+        enableSmoothing: true,
+      });
+
       running = true;
-      const rafLoop = () => {
-        if (!running || !landmarker) return;
-        const ts = performance.now();
-        const res = landmarker.detectForVideo(videoEl, ts);
-        const person = res.landmarks?.[0] as NormalizedLandmark[] | undefined;
-        drawOverlay(person);
-        requestAnimationFrame(rafLoop);
-      };
-
-      const rVFC = (videoEl as any).requestVideoFrameCallback as
-        | ((cb: (now: number, metadata: { mediaTime: number }) => void) => void)
-        | undefined;
-
-      if (typeof rVFC === 'function') {
-        const onFrame = (_now: number, metadata: { mediaTime: number }) => {
-          if (!running || !landmarker) return;
-          if (!videoEl.videoWidth || !videoEl.videoHeight) {
-            // Wait until we have dimensions
-            rVFC(onFrame);
-            return;
+      let missCount = 0;
+      const loop = async () => {
+        if (!running || !detector) return;
+        if (!videoEl.videoWidth || !videoEl.videoHeight) {
+          requestAnimationFrame(loop);
+          return;
+        }
+        try {
+          let poses: poseDetection.Pose[] | null = null;
+          if (detectMode === 'full') {
+            poses = await detector.estimatePoses(videoEl, { flipHorizontal: isMirrored });
+          } else {
+            // Bottom-crop fallback when ankles are missed
+            const vw = videoEl.videoWidth, vh = videoEl.videoHeight;
+            const cropH = Math.floor(vh * 0.7);
+            const cropY = vh - cropH;
+            const cropX = 0;
+            const cropW = vw;
+            if (!offscreenRef.current) offscreenRef.current = document.createElement('canvas');
+            const dCanvas = offscreenRef.current;
+            dCanvas.width = 256;
+            dCanvas.height = 256;
+            const dctx = dCanvas.getContext('2d')!;
+            dctx.drawImage(videoEl, cropX, cropY, cropW, cropH, 0, 0, dCanvas.width, dCanvas.height);
+            poses = await detector.estimatePoses(dCanvas, { flipHorizontal: isMirrored });
+            // Convert keypoints from crop-space back to video-space for overlay
+            if (poses && poses[0]?.keypoints) {
+              poses[0].keypoints = poses[0].keypoints.map(k => ({
+                ...k,
+                x: cropX + (k.x / dCanvas.width) * cropW,
+                y: cropY + (k.y / dCanvas.height) * cropH,
+              }));
+            }
           }
-          const ts = metadata?.mediaTime ? metadata.mediaTime * 1000 : performance.now();
-          const res = landmarker.detectForVideo(videoEl, ts);
-          const person = res.landmarks?.[0] as NormalizedLandmark[] | undefined;
-          drawOverlay(person);
-          rVFC(onFrame);
-        };
-        rVFC(onFrame);
-      } else {
-        requestAnimationFrame(rafLoop);
-      }
+          drawOverlay(poses || null);
+          const first = poses?.[0];
+          const hasAnkles = !!first?.keypoints?.find(k => (k.name || (k as any).part) === 'left_ankle' && (k.score ?? 0) > 0.2)
+                         || !!first?.keypoints?.find(k => (k.name || (k as any).part) === 'right_ankle' && (k.score ?? 0) > 0.2);
+          if (hasAnkles) {
+            missCount = 0;
+            setDetectMode('full');
+          } else {
+            missCount++;
+            if (missCount >= missThreshold) {
+              setDetectMode('crop');
+            }
+          }
+        } catch (err) {
+          console.warn('estimatePoses error', err);
+        }
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
     };
 
     init();
 
     return () => {
       running = false;
-      landmarker?.close();
+      detector?.dispose();
       const stream = videoEl.srcObject as MediaStream | null;
       stream?.getTracks().forEach((t) => t.stop());
     };
   }, [onDetect, fullScreen, targetFoot, accuracy, retryToken]);
 
   return (
+    <>
     <div
+      ref={containerRef}
       className={fullScreen ? 'relative w-screen h-screen' : "absolute top-4 right-4 z-10 bg-black/40 text-white rounded overflow-hidden"}
       style={fullScreen ? { position: 'fixed', inset: 0, zIndex: 1 } : undefined}
     >
@@ -306,7 +323,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       {cameraError && (
         <div className="fixed inset-x-0 bottom-6 mx-auto w-[92%] max-w-xl z-20 bg-white/95 text-black shadow rounded p-4 space-y-3">
           <div className="font-semibold">Camera access required</div>
-          <div className="text-sm">{cameraError}</div>
+          <div className="text-sm whitespace-pre-line">{cameraError}</div>
           <div className="flex items-center gap-3">
             <button
               className="px-4 py-2 bg-black text-white rounded"
@@ -326,5 +343,13 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         </div>
       )}
     </div>
+    {/* Fixed viewport detection badge (bottom-center) */}
+    <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 select-none pointer-events-none">
+      <span className={`${footDetected ? 'bg-green-500' : 'bg-red-500'} w-3 h-3 rounded-full animate-pulse`} />
+      <span className="px-2 py-1 rounded text-xs font-medium bg-black/60 text-white">
+        {footDetected ? 'Foot detected' : 'No foot detected'}
+      </span>
+    </div>
+    </>
   );
 }
