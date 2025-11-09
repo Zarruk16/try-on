@@ -29,6 +29,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const [retryToken, setRetryToken] = useState(0);
   const [isMirrored, setIsMirrored] = useState(false);
   const zoomFactor = 1.10; // slight zoom-in to match AR view
+  const debugDisableZoom = false; // set true to disable container zoom for debugging
+  const PIVOT_BIAS_PX = 12; // small toe-ward bias to calibrate GLB origin
+  const debugDrawAnchor = false; // draw cyan anchor->placement overlay when true
   const missThreshold = 6; // frames before switching to crop mode
   const [detectMode, setDetectMode] = useState<'full' | 'crop'>('full');
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
@@ -40,6 +43,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const shadowRef = useRef<THREE.Mesh | null>(null);
   const [shoeLoadError, setShoeLoadError] = useState<string | null>(null);
   const unitScaleRef = useRef<number>(1); // converts model units to pixels
+  const longestSizeRef = useRef<number | null>(null); // longest GLB dimension for unit->px scaling
   const lastShoePosRef = useRef<{ x: number; y: number } | null>(null);
   const lastShoeRotRef = useRef<number>(0);
   const [activeModelType, setActiveModelType] = useState<'THUNDER' | 'LIGHTNING'>('THUNDER');
@@ -66,6 +70,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
     const drawOverlay = (poses: poseDetection.Pose[] | null) => {
       const videoW = videoEl.videoWidth;
       const videoH = videoEl.videoHeight;
+      const POS_ALPHA = activeModelType === 'LIGHTNING' ? 0.35 : 0.5; // ankle smoothing
 
       const canvasW = fullScreen ? window.innerWidth : 320;
       const canvasH = fullScreen ? window.innerHeight : 240;
@@ -82,6 +87,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           renderer.setPixelRatio(window.devicePixelRatio);
           renderer.setSize(canvasW, canvasH);
           renderer.setClearColor(0x000000, 0);
+          // Use sRGB for correct PBR rendering
+          (renderer as any).outputColorSpace = (THREE as any).SRGBColorSpace;
           threeRendererRef.current = renderer;
 
           const scene = new THREE.Scene();
@@ -92,7 +99,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           scene.add(dir);
           threeSceneRef.current = scene;
 
-          const cam = new THREE.OrthographicCamera(0, canvasW, canvasH, 0, -1000, 1000);
+          const cam = new THREE.OrthographicCamera(0, canvasW, 0, canvasH, -1000, 1000);
           cam.position.set(canvasW / 2, canvasH / 2, 10);
           cam.lookAt(new THREE.Vector3(canvasW / 2, canvasH / 2, 0));
           threeCameraRef.current = cam;
@@ -107,15 +114,27 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           loader.load(url, (gltf) => {
             const wrapper = new THREE.Group();
             const model = gltf.scene;
+            // Fix texture color space for older GLTFs
+            model.traverse((o: any) => {
+              const mat: any = o?.material;
+              const tex: any = mat?.map;
+              if ((o as any)?.isMesh && mat && tex) {
+                if ('colorSpace' in tex) tex.colorSpace = (THREE as any).SRGBColorSpace;
+                if ('encoding' in tex) tex.encoding = (THREE as any).sRGBEncoding;
+                mat.needsUpdate = true;
+              }
+            });
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             model.position.sub(center);
             wrapper.add(model);
-            // Initial orientation: lay flat on screen plane
-            wrapper.rotation.set(Math.PI / 2, 0, 0);
+            // Base tilt so shoe lies on screen plane; flipped to face camera
+            wrapper.rotation.set(-Math.PI / 2, 0, 0);
             // Compute unit scale so longest model dimension fits base pixel size
             const size = box.getSize(new THREE.Vector3());
+            console.info('[FootTracker] GLB size (x,y,z):', size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2));
             const longest = Math.max(size.x, size.y, size.z) || 1;
+            longestSizeRef.current = longest;
             const basePx = Math.min(canvasW, canvasH) * 0.12;
             const unitScale = basePx / longest; // world units -> pixels
             unitScaleRef.current = unitScale;
@@ -138,6 +157,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             setShoeLoadError('Failed to load shoe model');
           });
         } else {
+          // Ensure sharpness on DPR changes (e.g., device rotate)
+          threeRendererRef.current.setPixelRatio(window.devicePixelRatio);
           threeRendererRef.current.setSize(canvasW, canvasH);
           if (threeCameraRef.current) {
             threeCameraRef.current.left = 0;
@@ -148,22 +169,27 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             threeCameraRef.current.updateProjectionMatrix();
             threeCameraRef.current.position.set(canvasW / 2, canvasH / 2, 10);
           }
+          // If canvas size changed, keep model size consistent by recomputing unit scale
+          if (shoeRef.current && longestSizeRef.current) {
+            const basePx2 = Math.min(canvasW, canvasH) * 0.12;
+            unitScaleRef.current = basePx2 / longestSizeRef.current;
+            shoeRef.current.scale.setScalar(unitScaleRef.current);
+          }
         }
       }
 
       ctx.clearRect(0, 0, canvasW, canvasH);
 
       const coverScale = Math.max(canvasW / videoW, canvasH / videoH);
-      const scale = coverScale * zoomFactor;
+      const scale = coverScale;
       const dispW = videoW * scale;
       const dispH = videoH * scale;
       const dx = (canvasW - dispW) / 2;
       const dy = (canvasH - dispH) / 2;
 
       const toCanvas = (vx: number, vy: number) => {
-        let x = dx + vx * scale;
+        const x = dx + vx * scale;
         const y = dy + vy * scale;
-        if (isMirrored) x = canvasW - x;
         return { x, y };
       };
 
@@ -195,8 +221,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         if (leftKnee && (leftKnee.score ?? 0) > 0.2) leftKneeVideoPx = { x: leftKnee.x, y: leftKnee.y };
         if (rightKnee && (rightKnee.score ?? 0) > 0.2) rightKneeVideoPx = { x: rightKnee.x, y: rightKnee.y };
 
-        leftVideoPx = smooth(prevLeftVideo, leftVideoPx);
-        rightVideoPx = smooth(prevRightVideo, rightVideoPx);
+        leftVideoPx = smooth(prevLeftVideo, leftVideoPx, POS_ALPHA);
+        rightVideoPx = smooth(prevRightVideo, rightVideoPx, POS_ALPHA);
         prevLeftVideo = leftVideoPx;
         prevRightVideo = rightVideoPx;
         if (leftVideoPx) leftPx = toCanvas(leftVideoPx.x, leftVideoPx.y);
@@ -216,6 +242,10 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       // Draw guidance sign if not detected
       const detected = !!leftPx || !!rightPx;
       setFootDetected(detected);
+      if (detected) {
+        // Reset HUD timer when a foot is detected
+        lastDetectTime = performance.now();
+      }
       if (!detected) {
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.fillRect(0, 0, canvasW, canvasH);
@@ -259,10 +289,12 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             const dx = toe.x - anchor.x;
             const dy = toe.y - anchor.y;
             const d = Math.hypot(dx, dy) || 1;
-            const ox = (dx / d) * Math.min(60, d * 0.45);
-            const oy = (dy / d) * Math.min(60, d * 0.45);
-            placeX += ox;
-            placeY += oy;
+            const along = Math.min(60, d * 0.45);
+            const ox = (dx / d) * along;
+            const oy = (dy / d) * along;
+            // small extra nudge toward toes to calibrate pivot
+            placeX += ox + (dx / d) * PIVOT_BIAS_PX;
+            placeY += oy + (dy / d) * PIVOT_BIAS_PX;
           }
           const prev = lastShoePosRef.current;
           if (prev) {
@@ -270,6 +302,19 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             placeY = prev.y * 0.65 + placeY * 0.35;
           }
           lastShoePosRef.current = { x: placeX, y: placeY };
+          // Debug anchor/direction overlay (toggle with debugDrawAnchor)
+          if (debugDrawAnchor) {
+            ctx.save();
+            ctx.strokeStyle = '#00E5FF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(anchor.x, anchor.y);
+            ctx.lineTo(placeX, placeY);
+            ctx.stroke();
+            ctx.fillStyle = '#00E5FF';
+            ctx.fillRect(placeX - 3, placeY - 3, 6, 6);
+            ctx.restore();
+          }
           model.position.set(placeX, placeY, 0);
           model.visible = true;
           // Dynamic scale based on ankle-knee distance (fallback to base if missing)
@@ -285,21 +330,22 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           const s = unitScaleRef.current * (scalePx / basePx);
           model.scale.setScalar(s);
 
-          // Toe-based rotation for better realism (smoothed)
-          if (toe) {
-            const ang = Math.atan2(toe.y - anchor.y, toe.x - anchor.x);
-            const zRot = isMirrored ? -ang : ang;
-            const blended = lastShoeRotRef.current * 0.6 + zRot * 0.4;
+          // Rotation based on best available direction (toe -> knee -> anchor), with light decay
+          const footDir = toe ?? knee ?? anchor;
+          if (footDir && (footDir !== anchor)) {
+            const ang = Math.atan2(footDir.y - anchor.y, footDir.x - anchor.x);
+            const blended = lastShoeRotRef.current * 0.7 + ang * 0.3;
             lastShoeRotRef.current = blended;
-            model.rotation.set(Math.PI / 2, 0, blended);
+            // Only rotate around Z; preserve base X/Y tilt set at load
+            model.rotation.z = blended;
           }
 
           // Shadow follows the shoe
           if (shadowRef.current) {
-            shadowRef.current.position.set(placeX, placeY, -0.01);
+            shadowRef.current.position.set(placeX, placeY, -0.5);
             shadowRef.current.visible = true;
-            const s = (scalePx / 1000) * 120;
-            shadowRef.current.scale.set(s, s, s);
+            const shadowScale = (scalePx / 1000) * 120;
+            shadowRef.current.scale.set(shadowScale, shadowScale, shadowScale);
           }
         } else {
           shoeRef.current.visible = false;
@@ -353,17 +399,25 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
       const track = stream.getVideoTracks()[0];
       const facing = track.getSettings().facingMode;
-      setIsMirrored(facing !== 'environment');
+      let mirror = facing !== 'environment';
+      if (typeof facing === 'undefined') mirror = true; // selfie default if facingMode missing
+      setIsMirrored(mirror);
+      console.info('[FootTracker] facingMode:', facing, 'isMirrored:', mirror);
       // Style video and canvas; apply consistent zoom via container
-      containerEl.style.transform = `scale(${zoomFactor})`;
-      containerEl.style.transformOrigin = 'center center';
+      if (!debugDisableZoom) {
+        containerEl.style.transform = `scale(${zoomFactor})`;
+        containerEl.style.transformOrigin = 'center center';
+      } else {
+        containerEl.style.transform = '';
+        containerEl.style.transformOrigin = '';
+      }
       videoEl.style.position = 'absolute';
       videoEl.style.top = '0';
       videoEl.style.left = '0';
       videoEl.style.width = '100%';
       videoEl.style.height = '100%';
       (videoEl.style as any).objectFit = 'cover';
-      videoEl.style.transform = isMirrored ? 'scaleX(-1)' : 'none';
+      // Mirror is applied via JSX style; avoid duplicating transform here
     };
 
     const init = async () => {
@@ -520,8 +574,12 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       />
       <canvas
         ref={webglCanvasRef}
-        className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "hidden"}
-        style={fullScreen ? { display: 'block', zIndex: 2 as any } : undefined}
+        className={fullScreen
+          ? "absolute top-0 left-0 w-screen h-screen pointer-events-none"
+          : "absolute top-0 left-0 w-[320px] h-[240px] pointer-events-none"}
+        style={fullScreen
+          ? { display: 'block', zIndex: 2 as any }
+          : { display: 'block', zIndex: 2 as any }}
       />
       {cameraError && (
         <div className="fixed inset-x-0 bottom-6 mx-auto w-[92%] max-w-xl z-20 bg-white/95 text-black shadow rounded p-4 space-y-3">
