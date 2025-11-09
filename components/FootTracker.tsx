@@ -130,8 +130,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             const center = box.getCenter(new THREE.Vector3());
             model.position.sub(center);
             wrapper.add(model);
-            // Base tilt so shoe lies on screen plane; flipped to face camera
-            wrapper.rotation.set(-Math.PI / 2, 0, 0);
+            // Base tilt so shoe lies on screen plane and faces camera
+            // Use +90° to match shadow orientation and avoid upside-down shoe
+            wrapper.rotation.set(Math.PI / 2, 0, 0);
             // Compute unit scale so longest model dimension fits base pixel size
             const size = box.getSize(new THREE.Vector3());
             console.info('[FootTracker] GLB size (x,y,z):', size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2));
@@ -341,7 +342,19 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         const knee = targetFoot === 'left' ? leftKneePx : targetFoot === 'right' ? rightKneePx : (leftKneePx || rightKneePx);
         if (anchor) {
           const model = shoeRef.current;
+          // Nudge placement forward along the foot direction so ankle anchor lands under heel
           let placeX = anchor.x, placeY = anchor.y;
+          const footDir = toe ?? knee ?? anchor;
+          if (footDir && (footDir !== anchor)) {
+            const dx = footDir.x - anchor.x;
+            const dy = footDir.y - anchor.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const nx = dx / len;
+            const ny = dy / len;
+            // Bias towards the toe so the shoe’s center isn’t stuck at the ankle
+            placeX += nx * PIVOT_BIAS_PX;
+            placeY += ny * PIVOT_BIAS_PX;
+          }
           lastShoePosRef.current = { x: placeX, y: placeY };
 
           // Debug anchor/direction overlay (toggle with debugDrawAnchor)
@@ -373,7 +386,6 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           model.scale.setScalar(s);
 
           // Rotation based on best available direction (toe -> knee -> anchor), with light decay
-          const footDir = toe ?? knee ?? anchor;
           if (footDir && (footDir !== anchor)) {
             const ang = Math.atan2(footDir.y - anchor.y, footDir.x - anchor.x);
             const blended = lastShoeRotRef.current * 0.7 + ang * 0.3;
