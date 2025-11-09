@@ -39,6 +39,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const shoeRef = useRef<THREE.Group | null>(null);
   const shadowRef = useRef<THREE.Mesh | null>(null);
   const [shoeLoadError, setShoeLoadError] = useState<string | null>(null);
+  const unitScaleRef = useRef<number>(1); // converts model units to pixels
 
   useEffect(() => {
     const videoEl = videoRef.current!;
@@ -109,9 +110,13 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             wrapper.add(model);
             // Initial orientation: lay flat on screen plane
             wrapper.rotation.set(Math.PI / 2, 0, 0);
-            // Base scale tuned for typical phone view
-            const baseScale = Math.min(canvasW, canvasH) * 0.12;
-            wrapper.scale.setScalar(baseScale / 1000);
+            // Compute unit scale so longest model dimension fits base pixel size
+            const size = box.getSize(new THREE.Vector3());
+            const longest = Math.max(size.x, size.y, size.z) || 1;
+            const basePx = Math.min(canvasW, canvasH) * 0.12;
+            const unitScale = basePx / longest; // world units -> pixels
+            unitScaleRef.current = unitScale;
+            wrapper.scale.setScalar(unitScale);
             wrapper.visible = false;
             threeSceneRef.current!.add(wrapper);
             shoeRef.current = wrapper;
@@ -134,6 +139,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           if (threeCameraRef.current) {
             threeCameraRef.current.left = 0;
             threeCameraRef.current.right = canvasW;
+            // Make Y axis increase downwards to match canvas pixel coordinates
             threeCameraRef.current.top = 0;
             threeCameraRef.current.bottom = canvasH;
             threeCameraRef.current.updateProjectionMatrix();
@@ -248,15 +254,17 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           model.position.set(anchor.x, anchor.y, 0);
           model.visible = true;
           // Dynamic scale based on ankle-knee distance (fallback to base if missing)
-          let scalePx = Math.min(canvasW, canvasH) * 0.12;
+          const basePx = Math.min(canvasW, canvasH) * 0.12;
+          let scalePx = basePx;
           if (knee) {
             const dx = knee.x - anchor.x;
             const dy = knee.y - anchor.y;
             const d = Math.hypot(dx, dy);
-            const base = Math.min(canvasW, canvasH) * 0.12; // original base in pixels
-            scalePx = Math.max(base * 0.7, Math.min(base * 1.6, d * 0.9));
+            scalePx = Math.max(basePx * 0.7, Math.min(basePx * 1.6, d * 0.9));
           }
-          model.scale.setScalar(scalePx / 1000);
+          // Apply scale in pixels via precomputed unit scale
+          const s = unitScaleRef.current * (scalePx / basePx);
+          model.scale.setScalar(s);
 
           // Toe-based rotation for better realism
           if (toe) {
@@ -465,7 +473,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       <canvas
         ref={webglCanvasRef}
         className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "hidden"}
-        style={fullScreen ? { display: 'block' } : undefined}
+        style={fullScreen ? { display: 'block', zIndex: 2 as any } : undefined}
       />
       {cameraError && (
         <div className="fixed inset-x-0 bottom-6 mx-auto w-[92%] max-w-xl z-20 bg-white/95 text-black shadow rounded p-4 space-y-3">

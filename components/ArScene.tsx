@@ -133,7 +133,10 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
       powerPreference: 'high-performance',
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    // Reduce internal resolution to fight camera lag on mobile AR
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = false;
     renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -384,23 +387,14 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
       }
     };
 
-    // Add debug controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    // Remove controls to avoid unnecessary overhead during AR
+    const controls: OrbitControls | null = null;
 
     // --- FIX: Animation Loop ---
     renderer.setAnimationLoop((time, frame) => {
       if (frame) onXRFrame(time, frame);
       
-      const isPresenting = renderer.xr.isPresenting;
-      
-      // Explicitly enable/disable controls based on AR session
-      controls.enabled = !isPresenting;
-
-      if (!isPresenting) {
-        controls.update(); // Only update if not in AR
-      }
+      const isPresenting = renderer.xr.isPresenting;
       
       renderer.render(scene, camera);
     });
