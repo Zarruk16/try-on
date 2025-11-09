@@ -307,24 +307,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         const knee = targetFoot === 'left' ? leftKneePx : targetFoot === 'right' ? rightKneePx : (leftKneePx || rightKneePx);
         if (anchor) {
           const model = shoeRef.current;
-          // Offset towards toe to center the shoe on the foot, with smoothing
           let placeX = anchor.x, placeY = anchor.y;
-          if (toe) {
-            const dx = toe.x - anchor.x;
-            const dy = toe.y - anchor.y;
-            const d = Math.hypot(dx, dy) || 1;
-            const along = Math.min(60, d * 0.45);
-            const ox = (dx / d) * along;
-            const oy = (dy / d) * along;
-            // small extra nudge toward toes to calibrate pivot
-            placeX += ox + (dx / d) * PIVOT_BIAS_PX;
-            placeY += oy + (dy / d) * PIVOT_BIAS_PX;
-          }
-          const prev = lastShoePosRef.current;
-          if (prev) {
-            placeX = prev.x * 0.65 + placeX * 0.35;
-            placeY = prev.y * 0.65 + placeY * 0.35;
-          }
           lastShoePosRef.current = { x: placeX, y: placeY };
 
           // Debug anchor/direction overlay (toggle with debugDrawAnchor)
