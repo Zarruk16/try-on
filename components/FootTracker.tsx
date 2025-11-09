@@ -342,19 +342,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         const knee = targetFoot === 'left' ? leftKneePx : targetFoot === 'right' ? rightKneePx : (leftKneePx || rightKneePx);
         if (anchor) {
           const model = shoeRef.current;
-          // Nudge placement forward along the foot direction so ankle anchor lands under heel
+          // Hard-stick the shoe center to the green anchor (no offset)
           let placeX = anchor.x, placeY = anchor.y;
           const footDir = toe ?? knee ?? anchor;
-          if (footDir && (footDir !== anchor)) {
-            const dx = footDir.x - anchor.x;
-            const dy = footDir.y - anchor.y;
-            const len = Math.hypot(dx, dy) || 1;
-            const nx = dx / len;
-            const ny = dy / len;
-            // Bias towards the toe so the shoe’s center isn’t stuck at the ankle
-            placeX += nx * PIVOT_BIAS_PX;
-            placeY += ny * PIVOT_BIAS_PX;
-          }
           lastShoePosRef.current = { x: placeX, y: placeY };
 
           // Debug anchor/direction overlay (toggle with debugDrawAnchor)
@@ -372,15 +362,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           }
           model.position.set(placeX, placeY, 0);
           model.visible = true;
-          // Dynamic scale based on ankle-knee distance (fallback to base if missing)
+          // Enlarge shoe with a stable scale factor relative to base
           const basePx = Math.min(canvasW, canvasH) * 0.12;
-          let scalePx = basePx;
-          if (knee) {
-            const dx = knee.x - anchor.x;
-            const dy = knee.y - anchor.y;
-            const d = Math.hypot(dx, dy);
-            scalePx = Math.max(basePx * 0.7, Math.min(basePx * 1.6, d * 0.9));
-          }
+          const scalePx = basePx * 1.6; // enlarge 60% to avoid tiny rendering
           // Apply scale in pixels via precomputed unit scale
           const s = unitScaleRef.current * (scalePx / basePx);
           model.scale.setScalar(s);
@@ -388,7 +372,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           // Rotation based on best available direction (toe -> knee -> anchor), with light decay
           if (footDir && (footDir !== anchor)) {
             const ang = Math.atan2(footDir.y - anchor.y, footDir.x - anchor.x);
-            const blended = lastShoeRotRef.current * 0.7 + ang * 0.3;
+            // Correct angle when video is mirrored so shoe doesn't flip the wrong way
+            const corrected = isMirrored ? -ang : ang;
+            const blended = lastShoeRotRef.current * 0.7 + corrected * 0.3;
             lastShoeRotRef.current = blended;
             // Only rotate around Z; preserve base X/Y tilt set at load
             model.rotation.z = blended;
