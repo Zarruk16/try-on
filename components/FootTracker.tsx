@@ -40,6 +40,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const shadowRef = useRef<THREE.Mesh | null>(null);
   const [shoeLoadError, setShoeLoadError] = useState<string | null>(null);
   const unitScaleRef = useRef<number>(1); // converts model units to pixels
+  const lastShoePosRef = useRef<{ x: number; y: number } | null>(null);
+  const lastShoeRotRef = useRef<number>(0);
+  const [activeModelType, setActiveModelType] = useState<'THUNDER' | 'LIGHTNING'>('THUNDER');
 
   useEffect(() => {
     const videoEl = videoRef.current!;
@@ -250,8 +253,24 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         const knee = targetFoot === 'left' ? leftKneePx : targetFoot === 'right' ? rightKneePx : (leftKneePx || rightKneePx);
         if (anchor) {
           const model = shoeRef.current;
-          // Convert canvas Y to three ortho Y (same orientation since camera top=0, bottom=H)
-          model.position.set(anchor.x, anchor.y, 0);
+          // Offset towards toe to center the shoe on the foot, with smoothing
+          let placeX = anchor.x, placeY = anchor.y;
+          if (toe) {
+            const dx = toe.x - anchor.x;
+            const dy = toe.y - anchor.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const ox = (dx / d) * Math.min(60, d * 0.45);
+            const oy = (dy / d) * Math.min(60, d * 0.45);
+            placeX += ox;
+            placeY += oy;
+          }
+          const prev = lastShoePosRef.current;
+          if (prev) {
+            placeX = prev.x * 0.65 + placeX * 0.35;
+            placeY = prev.y * 0.65 + placeY * 0.35;
+          }
+          lastShoePosRef.current = { x: placeX, y: placeY };
+          model.position.set(placeX, placeY, 0);
           model.visible = true;
           // Dynamic scale based on ankle-knee distance (fallback to base if missing)
           const basePx = Math.min(canvasW, canvasH) * 0.12;
@@ -266,17 +285,18 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           const s = unitScaleRef.current * (scalePx / basePx);
           model.scale.setScalar(s);
 
-          // Toe-based rotation for better realism
+          // Toe-based rotation for better realism (smoothed)
           if (toe) {
             const ang = Math.atan2(toe.y - anchor.y, toe.x - anchor.x);
             const zRot = isMirrored ? -ang : ang;
-            // Keep the initial X-rotation to lay model flat
-            model.rotation.set(Math.PI / 2, 0, zRot);
+            const blended = lastShoeRotRef.current * 0.6 + zRot * 0.4;
+            lastShoeRotRef.current = blended;
+            model.rotation.set(Math.PI / 2, 0, blended);
           }
 
           // Shadow follows the shoe
           if (shadowRef.current) {
-            shadowRef.current.position.set(anchor.x, anchor.y, -0.01);
+            shadowRef.current.position.set(placeX, placeY, -0.01);
             shadowRef.current.visible = true;
             const s = (scalePx / 1000) * 120;
             shadowRef.current.scale.set(s, s, s);
@@ -382,7 +402,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
       await tf.setBackend('webgl');
       await tf.ready();
-      // Prefer Thunder for accuracy; allow MultiPose Lightning fallback when needed
+      // Prefer Thunder for accuracy; allow Lightning fallback when needed
       const mt = accuracy === 'lite'
         ? (poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING)
         : (poseDetection.movenet.modelType.SINGLEPOSE_THUNDER);
@@ -390,15 +410,19 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         modelType: mt,
         enableSmoothing: true,
       });
+      setActiveModelType(mt === poseDetection.movenet.modelType.SINGLEPOSE_THUNDER ? 'THUNDER' : 'LIGHTNING');
 
       running = true;
       let missCount = 0;
-      const loop = async () => {
+      let avgTime = 0;
+      const targetFrameMs = 33; // ~30fps
+      const onFrame = async () => {
         if (!running || !detector) return;
         if (!videoEl.videoWidth || !videoEl.videoHeight) {
-          requestAnimationFrame(loop);
+          scheduleNext();
           return;
         }
+        const t0 = performance.now();
         try {
           let poses: poseDetection.Pose[] | null = null;
           if (detectMode === 'full') {
@@ -412,8 +436,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             const cropW = vw;
             if (!offscreenRef.current) offscreenRef.current = document.createElement('canvas');
             const dCanvas = offscreenRef.current;
-            dCanvas.width = 256;
-            dCanvas.height = 256;
+            dCanvas.width = 224;
+            dCanvas.height = 224;
             const dctx = dCanvas.getContext('2d')!;
             dctx.drawImage(videoEl, cropX, cropY, cropW, cropH, 0, 0, dCanvas.width, dCanvas.height);
             poses = await detector.estimatePoses(dCanvas, { flipHorizontal: isMirrored });
@@ -442,9 +466,33 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         } catch (err) {
           console.warn('estimatePoses error', err);
         }
-        requestAnimationFrame(loop);
+        const dt = performance.now() - t0;
+        avgTime = avgTime * 0.8 + dt * 0.2;
+        // If heavy model is too slow, switch to Lightning once
+        if (accuracy !== 'lite' && activeModelType === 'THUNDER' && avgTime > 45) {
+          try {
+            detector?.dispose();
+            const lt = poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING;
+            detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+              modelType: lt,
+              enableSmoothing: true,
+            });
+            setActiveModelType('LIGHTNING');
+          } catch (e) {
+            console.warn('Model switch failed', e);
+          }
+        }
+        scheduleNext();
       };
-      requestAnimationFrame(loop);
+
+      const scheduleNext = () => {
+        if ('requestVideoFrameCallback' in (videoEl as any)) {
+          (videoEl as any).requestVideoFrameCallback(onFrame);
+        } else {
+          setTimeout(onFrame, targetFrameMs);
+        }
+      };
+      scheduleNext();
     };
 
     init();

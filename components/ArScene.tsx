@@ -32,6 +32,8 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
   const [isARSupported, setIsARSupported] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isARSessionActive, setIsARSessionActive] = useState<boolean>(false);
+  const prevMarkerPosRef = useRef<THREE.Vector3 | null>(null);
+  const prevMarkerQuatRef = useRef<THREE.Quaternion | null>(null);
 
   const startARSession = async () => {
     if (!navigator.xr) {
@@ -355,7 +357,21 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
           const pose = hit.getPose(hitTestReferenceSpaceRef.current);
           if (pose) {
             markerRef.current.visible = true;
-            markerRef.current.matrix.fromArray(pose.transform.matrix);
+            const m = new THREE.Matrix4().fromArray(pose.transform.matrix);
+            const p = new THREE.Vector3();
+            const q = new THREE.Quaternion();
+            const s = new THREE.Vector3();
+            m.decompose(p, q, s);
+            // Smooth position and rotation to reduce jitter
+            const alpha = 0.35;
+            if (!prevMarkerPosRef.current) prevMarkerPosRef.current = p.clone();
+            if (!prevMarkerQuatRef.current) prevMarkerQuatRef.current = q.clone();
+            markerRef.current.position.lerpVectors(prevMarkerPosRef.current, p, alpha);
+            // Use instance method for TS compatibility
+            markerRef.current.quaternion.slerpQuaternions(prevMarkerQuatRef.current, q, alpha);
+            prevMarkerPosRef.current.copy(markerRef.current.position);
+            prevMarkerQuatRef.current.copy(markerRef.current.quaternion);
+            markerRef.current.updateMatrixWorld();
             pulseAnimation();
 
             // Auto-place after marker is visible for a short time
