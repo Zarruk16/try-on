@@ -37,6 +37,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const threeSceneRef = useRef<THREE.Scene | null>(null);
   const threeCameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const shoeRef = useRef<THREE.Group | null>(null);
+  const shadowRef = useRef<THREE.Mesh | null>(null);
+  const [shoeLoadError, setShoeLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const videoEl = videoRef.current!;
@@ -113,6 +115,19 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             wrapper.visible = false;
             threeSceneRef.current!.add(wrapper);
             shoeRef.current = wrapper;
+
+            // Simple shadow blob under shoe for grounding
+            const shadowGeom = new THREE.CircleGeometry(18, 32);
+            const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 });
+            const shadow = new THREE.Mesh(shadowGeom, shadowMat);
+            shadow.rotation.x = Math.PI / 2;
+            shadow.visible = false;
+            threeSceneRef.current!.add(shadow);
+            shadowRef.current = shadow;
+            setShoeLoadError(null);
+          }, undefined, (err) => {
+            console.error('GLB load error', err);
+            setShoeLoadError('Failed to load shoe model');
           });
         } else {
           threeRendererRef.current.setSize(canvasW, canvasH);
@@ -145,15 +160,31 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
       let leftVideoPx: { x: number; y: number } | null = null;
       let rightVideoPx: { x: number; y: number } | null = null;
+      let leftToeVideoPx: { x: number; y: number } | null = null;
+      let rightToeVideoPx: { x: number; y: number } | null = null;
+      let leftKneeVideoPx: { x: number; y: number } | null = null;
+      let rightKneeVideoPx: { x: number; y: number } | null = null;
       let leftPx: { x: number; y: number } | null = null;
       let rightPx: { x: number; y: number } | null = null;
+      let leftToePx: { x: number; y: number } | null = null;
+      let rightToePx: { x: number; y: number } | null = null;
+      let leftKneePx: { x: number; y: number } | null = null;
+      let rightKneePx: { x: number; y: number } | null = null;
 
       const first = poses?.[0];
       if (first?.keypoints) {
         const left = first.keypoints.find(k => (k.name || (k as any).part) === 'left_ankle');
         const right = first.keypoints.find(k => (k.name || (k as any).part) === 'right_ankle');
+        const leftToe = first.keypoints.find(k => (k.name || (k as any).part) === 'left_foot_index');
+        const rightToe = first.keypoints.find(k => (k.name || (k as any).part) === 'right_foot_index');
+        const leftKnee = first.keypoints.find(k => (k.name || (k as any).part) === 'left_knee');
+        const rightKnee = first.keypoints.find(k => (k.name || (k as any).part) === 'right_knee');
         if (left && (left.score ?? 0) > 0.2) leftVideoPx = { x: left.x, y: left.y };
         if (right && (right.score ?? 0) > 0.2) rightVideoPx = { x: right.x, y: right.y };
+        if (leftToe && (leftToe.score ?? 0) > 0.2) leftToeVideoPx = { x: leftToe.x, y: leftToe.y };
+        if (rightToe && (rightToe.score ?? 0) > 0.2) rightToeVideoPx = { x: rightToe.x, y: rightToe.y };
+        if (leftKnee && (leftKnee.score ?? 0) > 0.2) leftKneeVideoPx = { x: leftKnee.x, y: leftKnee.y };
+        if (rightKnee && (rightKnee.score ?? 0) > 0.2) rightKneeVideoPx = { x: rightKnee.x, y: rightKnee.y };
 
         leftVideoPx = smooth(prevLeftVideo, leftVideoPx);
         rightVideoPx = smooth(prevRightVideo, rightVideoPx);
@@ -161,6 +192,10 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         prevRightVideo = rightVideoPx;
         if (leftVideoPx) leftPx = toCanvas(leftVideoPx.x, leftVideoPx.y);
         if (rightVideoPx) rightPx = toCanvas(rightVideoPx.x, rightVideoPx.y);
+        if (leftToeVideoPx) leftToePx = toCanvas(leftToeVideoPx.x, leftToeVideoPx.y);
+        if (rightToeVideoPx) rightToePx = toCanvas(rightToeVideoPx.x, rightToeVideoPx.y);
+        if (leftKneeVideoPx) leftKneePx = toCanvas(leftKneeVideoPx.x, leftKneeVideoPx.y);
+        if (rightKneeVideoPx) rightKneePx = toCanvas(rightKneeVideoPx.x, rightKneeVideoPx.y);
       }
 
       if (targetFoot === 'left') {
@@ -205,15 +240,42 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       // Update 3D shoe overlay position
       if (threeRendererRef.current && threeSceneRef.current && threeCameraRef.current && shoeRef.current) {
         const anchor = targetFoot === 'left' ? leftPx : targetFoot === 'right' ? rightPx : (leftPx || rightPx);
+        const toe = targetFoot === 'left' ? leftToePx : targetFoot === 'right' ? rightToePx : (leftToePx || rightToePx);
+        const knee = targetFoot === 'left' ? leftKneePx : targetFoot === 'right' ? rightKneePx : (leftKneePx || rightKneePx);
         if (anchor) {
           const model = shoeRef.current;
           // Convert canvas Y to three ortho Y (same orientation since camera top=0, bottom=H)
           model.position.set(anchor.x, anchor.y, 0);
           model.visible = true;
-          // Heuristic orientation: mirror if front camera
-          model.scale.setScalar(Math.min(canvasW, canvasH) * 0.12 / 1000);
+          // Dynamic scale based on ankle-knee distance (fallback to base if missing)
+          let scalePx = Math.min(canvasW, canvasH) * 0.12;
+          if (knee) {
+            const dx = knee.x - anchor.x;
+            const dy = knee.y - anchor.y;
+            const d = Math.hypot(dx, dy);
+            const base = Math.min(canvasW, canvasH) * 0.12; // original base in pixels
+            scalePx = Math.max(base * 0.7, Math.min(base * 1.6, d * 0.9));
+          }
+          model.scale.setScalar(scalePx / 1000);
+
+          // Toe-based rotation for better realism
+          if (toe) {
+            const ang = Math.atan2(toe.y - anchor.y, toe.x - anchor.x);
+            const zRot = isMirrored ? -ang : ang;
+            // Keep the initial X-rotation to lay model flat
+            model.rotation.set(Math.PI / 2, 0, zRot);
+          }
+
+          // Shadow follows the shoe
+          if (shadowRef.current) {
+            shadowRef.current.position.set(anchor.x, anchor.y, -0.01);
+            shadowRef.current.visible = true;
+            const s = (scalePx / 1000) * 120;
+            shadowRef.current.scale.set(s, s, s);
+          }
         } else {
           shoeRef.current.visible = false;
+          if (shadowRef.current) shadowRef.current.visible = false;
         }
         threeRendererRef.current.render(threeSceneRef.current, threeCameraRef.current);
       }
@@ -435,6 +497,11 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         {footDetected ? 'Foot detected' : 'No foot detected'}
       </span>
     </div>
+    {shoeLoadError && (
+      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 bg-red-600 text-white px-3 py-2 rounded shadow text-sm">
+        {shoeLoadError}
+      </div>
+    )}
     </>
   );
 }

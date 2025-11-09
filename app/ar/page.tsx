@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { fetchB2Models, type B2ModelItem } from '@/lib/b2';
+import FootTracker, { type AnkleCoords } from '@/components/FootTracker';
 
 const ArScene = dynamic(() => import('@/components/ArScene'), { ssr: false });
 
@@ -12,6 +13,15 @@ export default function ARPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isARActive, setIsARActive] = useState(false);
+  const [ankles, setAnkles] = useState<AnkleCoords>({ left: null, right: null });
+  // Convert normalized video coordinates to NDC for hinting (-1..1)
+  const hintNDC = (() => {
+    const p = ankles.left || ankles.right;
+    if (!p) return null;
+    const x = p.x * 2 - 1;
+    const y = 1 - p.y * 2;
+    return { x, y };
+  })();
 
   useEffect(() => {
     const load = async () => {
@@ -34,7 +44,13 @@ export default function ARPage() {
 
   return (
     <main className="relative w-screen h-screen">
-      <ArScene modelUrl={modelUrl} onSessionChange={setIsARActive} placeOnDetection />
+      {/* Pre-AR detection camera to provide ankle hint for initial placement */}
+      {!isARActive && (
+        <div className="absolute top-0 left-0 w-full h-full">
+          <FootTracker onDetect={setAnkles} fullScreen accuracy="heavy" />
+        </div>
+      )}
+      <ArScene modelUrl={modelUrl} onSessionChange={setIsARActive} placeOnDetection anchorHintNDC={hintNDC} />
 
       {!isARActive && (
         <div className="absolute top-4 left-4 bg-white/85 text-black p-4 rounded-md shadow z-10 w-[360px] space-y-3">

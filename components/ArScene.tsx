@@ -11,9 +11,10 @@ interface ArSceneProps {
   modelUrl?: string;
   placeOnDetection?: boolean;
   onSessionChange?: (active: boolean) => void;
+  anchorHintNDC?: { x: number; y: number } | null;
 }
 
-export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDetection = false, onSessionChange }: ArSceneProps) {
+export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDetection = false, onSessionChange, anchorHintNDC = null }: ArSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -326,7 +327,28 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
       if (hitTestSourceRef.current && markerRef.current && hitTestReferenceSpaceRef.current) {
         const hitTestResults = frame.getHitTestResults(hitTestSourceRef.current);
         if (hitTestResults.length > 0) {
-          const hit = hitTestResults[0];
+          // If we have an anchor hint (in NDC), prefer the hit whose projected screen position is closest to the hint
+          let hit = hitTestResults[0];
+          if (anchorHintNDC && renderer.xr.isPresenting) {
+            const xrCam = renderer.xr.getCamera();
+            let bestIdx = 0;
+            let bestDist = Number.POSITIVE_INFINITY;
+            for (let i = 0; i < hitTestResults.length; i++) {
+              const pose = hitTestResults[i].getPose(hitTestReferenceSpaceRef.current!);
+              if (!pose) continue;
+              const m = new THREE.Matrix4().fromArray(pose.transform.matrix);
+              const pos = new THREE.Vector3().setFromMatrixPosition(m);
+              const ndc = pos.clone().project(xrCam);
+              const dx = ndc.x - anchorHintNDC.x;
+              const dy = ndc.y - anchorHintNDC.y;
+              const dist = dx * dx + dy * dy;
+              if (dist < bestDist) {
+                bestDist = dist;
+                bestIdx = i;
+              }
+            }
+            hit = hitTestResults[bestIdx];
+          }
           const pose = hit.getPose(hitTestReferenceSpaceRef.current);
           if (pose) {
             markerRef.current.visible = true;
@@ -409,7 +431,7 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
       }
       rendererRef.current?.dispose();
     };
-  }, [isCameraFlipped, isARSupported, modelUrl, placeOnDetection]);
+  }, [isCameraFlipped, isARSupported, modelUrl, placeOnDetection, anchorHintNDC]);
 
   return (
     <div 
