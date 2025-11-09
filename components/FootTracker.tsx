@@ -342,9 +342,23 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         const knee = targetFoot === 'left' ? leftKneePx : targetFoot === 'right' ? rightKneePx : (leftKneePx || rightKneePx);
         if (anchor) {
           const model = shoeRef.current;
-          // Hard-stick the shoe center to the green anchor (no offset)
+          // Place at ankle anchor with calibrated offset along foot direction
           let placeX = anchor.x, placeY = anchor.y;
           const footDir = toe ?? knee ?? anchor;
+          if (footDir && (footDir !== anchor)) {
+            const dx = footDir.x - anchor.x;
+            const dy = footDir.y - anchor.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const nx = dx / len;
+            const ny = dy / len;
+            // Forward/lateral offsets scale with canvas size for consistent feel
+            const base = Math.min(canvasW, canvasH);
+            const forwardPx = base * 0.06;  // ~6% of min dimension
+            const lateralPx = base * 0.01;  // ~1% sideways nudge
+            // Rotate offset into canvas coords (Y down)
+            placeX += nx * forwardPx - ny * lateralPx;
+            placeY += ny * forwardPx + nx * lateralPx;
+          }
           lastShoePosRef.current = { x: placeX, y: placeY };
 
           // Debug anchor/direction overlay (toggle with debugDrawAnchor)
