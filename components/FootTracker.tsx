@@ -41,6 +41,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const threeCameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const shoeRef = useRef<THREE.Group | null>(null);
   const shadowRef = useRef<THREE.Mesh | null>(null);
+  const threeReadyWarnedRef = useRef(false);
+  const lastRawLogRef = useRef(0);
   const [shoeLoadError, setShoeLoadError] = useState<string | null>(null);
   const unitScaleRef = useRef<number>(1); // converts model units to pixels
   const longestSizeRef = useRef<number | null>(null); // longest GLB dimension for unit->px scaling
@@ -236,7 +238,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       // --- START DEBUG DISPLAY ---
       ctx.save();
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(5, 5, 220, 80);
+      ctx.fillRect(5, 5, 260, 120);
       ctx.fillStyle = 'white';
       ctx.font = '12px monospace';
       ctx.textAlign = 'left';
@@ -248,12 +250,18 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       } else {
         ctx.fillText(`anchor: null`, 10, 35);
       }
+      // Raw video pixel coords (pre-canvas mapping)
+      const lraw = leftVideoPx ? `${Math.round(leftVideoPx.x)}, ${Math.round(leftVideoPx.y)}` : 'null';
+      const rraw = rightVideoPx ? `${Math.round(rightVideoPx.x)}, ${Math.round(rightVideoPx.y)}` : 'null';
+      ctx.fillText(`L raw: ${lraw}`, 10, 50);
+      ctx.fillText(`R raw: ${rraw}`, 135, 50);
       if (shoeRef.current) {
-        ctx.fillText(`shoe visible: ${shoeRef.current.visible}`, 10, 50);
-        ctx.fillText(`shoe pos: ${shoeRef.current.position.x.toFixed(0)}, ${shoeRef.current.position.y.toFixed(0)}`, 10, 65);
+        ctx.fillText(`shoe visible: ${shoeRef.current.visible}`, 10, 80);
+        ctx.fillText(`shoe pos: ${shoeRef.current.position.x.toFixed(0)}, ${shoeRef.current.position.y.toFixed(0)}`, 10, 95);
       } else {
-        ctx.fillText(`shoeRef: null`, 10, 50);
+        ctx.fillText(`shoeRef: null`, 10, 80);
       }
+      ctx.fillText(`mode: ${detectMode} • model: ${activeModelType}`, 10, 110);
       ctx.restore();
       // --- END DEBUG DISPLAY ---
 
@@ -299,8 +307,34 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
       const videoNorm = (p: { x: number; y: number } | null) => p ? { x: p.x / videoW, y: p.y / videoH } : null;
       onDetect({ left: videoNorm(leftVideoPx), right: videoNorm(rightVideoPx) });
+      // Rate-limited console log of raw ankle pixels to aid debugging
+      {
+        const now = performance.now();
+        if (now - lastRawLogRef.current > 1000) {
+          console.log('ankle raw px', {
+            left: leftVideoPx ? { x: Math.round(leftVideoPx.x), y: Math.round(leftVideoPx.y) } : null,
+            right: rightVideoPx ? { x: Math.round(rightVideoPx.x), y: Math.round(rightVideoPx.y) } : null,
+            canvasSize: { w: canvasW, h: canvasH },
+            videoSize: { w: videoW, h: videoH },
+            detectMode,
+            model: activeModelType,
+          });
+          lastRawLogRef.current = now;
+        }
+      }
 
       // Update 3D shoe overlay position
+      if (!(threeRendererRef.current && threeSceneRef.current && threeCameraRef.current && shoeRef.current)) {
+        if (!threeReadyWarnedRef.current) {
+          console.warn('3D overlay not ready', {
+            renderer: !!threeRendererRef.current,
+            scene: !!threeSceneRef.current,
+            camera: !!threeCameraRef.current,
+            shoe: !!shoeRef.current,
+          });
+          threeReadyWarnedRef.current = true;
+        }
+      }
       if (threeRendererRef.current && threeSceneRef.current && threeCameraRef.current && shoeRef.current) {
         const anchor = targetFoot === 'left' ? leftPx : targetFoot === 'right' ? rightPx : (leftPx || rightPx);
         const toe = targetFoot === 'left' ? leftToePx : targetFoot === 'right' ? rightToePx : (leftToePx || rightToePx);
