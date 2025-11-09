@@ -101,7 +101,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           scene.add(dir);
           threeSceneRef.current = scene;
 
-          const cam = new THREE.OrthographicCamera(0, canvasW, 0, canvasH, -1000, 1000);
+          const cam = new THREE.OrthographicCamera(0, canvasW, canvasH, 0, -1000, 1000);
           cam.position.set(canvasW / 2, canvasH / 2, 10);
           cam.lookAt(new THREE.Vector3(canvasW / 2, canvasH / 2, 0));
           threeCameraRef.current = cam;
@@ -166,9 +166,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           if (threeCameraRef.current) {
             threeCameraRef.current.left = 0;
             threeCameraRef.current.right = canvasW;
-            // Make Y axis increase downwards to match canvas pixel coordinates
-            threeCameraRef.current.top = 0;
-            threeCameraRef.current.bottom = canvasH;
+            // Switch to Y-up; we’ll convert pixel Y when placing
+            threeCameraRef.current.top = canvasH;
+            threeCameraRef.current.bottom = 0;
             threeCameraRef.current.updateProjectionMatrix();
             threeCameraRef.current.position.set(canvasW / 2, canvasH / 2, 10);
           }
@@ -360,7 +360,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             ctx.fillRect(placeX - 3, placeY - 3, 6, 6);
             ctx.restore();
           }
-          model.position.set(placeX, placeY, 0);
+          // Convert canvas pixel Y (downwards) to Three world Y (upwards)
+          const worldY = canvasH - placeY;
+          model.position.set(placeX, worldY, 0);
           model.visible = true;
           // Enlarge shoe with a stable scale factor relative to base
           const basePx = Math.min(canvasW, canvasH) * 0.12;
@@ -382,7 +384,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
           // Shadow follows the shoe
           if (shadowRef.current) {
-            shadowRef.current.position.set(placeX, placeY, -0.5);
+            shadowRef.current.position.set(placeX, worldY, -0.5);
             shadowRef.current.visible = true;
             const shadowScale = (scalePx / 1000) * 120;
             shadowRef.current.scale.set(shadowScale, shadowScale, shadowScale);
