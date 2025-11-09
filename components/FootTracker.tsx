@@ -5,6 +5,8 @@ import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 export interface AnkleCoords {
   left: { x: number; y: number } | null;
@@ -56,6 +58,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
     const containerEl = containerRef.current!;
     const ctx = canvasEl.getContext('2d')!;
 
+    // Enable Three.js caching to speed up repeated loads
+    THREE.Cache.enabled = true;
+
     let detector: poseDetection.PoseDetector | null = null;
     let running = false;
     let lastCanvasW = 0;
@@ -106,14 +111,28 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           cam.lookAt(new THREE.Vector3(canvasW / 2, canvasH / 2, 0));
           threeCameraRef.current = cam;
 
-          // Load shoe model
+          // Load shoe model (Backblaze via proxy) with Draco/Meshopt decoders
           const loader = new GLTFLoader();
-          const url = targetFoot === 'left'
+          loader.setCrossOrigin('anonymous');
+          const dracoLoader = new DRACOLoader();
+          dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+          dracoLoader.setDecoderConfig({ type: 'js' });
+          loader.setDRACOLoader(dracoLoader);
+          loader.setMeshoptDecoder(MeshoptDecoder);
+
+          const modelKey = targetFoot === 'left'
+            ? 'left-foot-sneaker.glb'
+            : targetFoot === 'right'
+              ? 'right-foot-sneaker.glb'
+              : 'sneaker.glb';
+          const b2Url = `/api/b2/file?key=${encodeURIComponent(modelKey)}`;
+          const localFallback = targetFoot === 'left'
             ? '/model/left-foot-sneaker.glb'
             : targetFoot === 'right'
               ? '/model/right-foot-sneaker.glb'
               : '/model/sneaker.glb';
-          loader.load(url, (gltf) => {
+
+          loader.load(b2Url, (gltf) => {
             const wrapper = new THREE.Group();
             const model = gltf.scene;
             // Fix texture color space for older GLTFs
@@ -156,8 +175,47 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             shadowRef.current = shadow;
             setShoeLoadError(null);
           }, undefined, (err) => {
-            console.error('GLB load error', err);
-            setShoeLoadError('Failed to load shoe model');
+            console.warn('B2 GLB load error, falling back to local asset', err);
+            loader.load(localFallback, (gltf) => {
+              const wrapper = new THREE.Group();
+              const model = gltf.scene;
+              model.traverse((o: any) => {
+                const mat: any = o?.material;
+                const tex: any = mat?.map;
+                if ((o as any)?.isMesh && mat && tex) {
+                  if ('colorSpace' in tex) tex.colorSpace = (THREE as any).SRGBColorSpace;
+                  if ('encoding' in tex) tex.encoding = (THREE as any).sRGBEncoding;
+                  mat.needsUpdate = true;
+                }
+              });
+              const box = new THREE.Box3().setFromObject(model);
+              const center = box.getCenter(new THREE.Vector3());
+              model.position.sub(center);
+              wrapper.add(model);
+              wrapper.rotation.set(Math.PI / 2, 0, 0);
+              const size = box.getSize(new THREE.Vector3());
+              console.info('[FootTracker] GLB size (x,y,z):', size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2));
+              const longest = Math.max(size.x, size.y, size.z) || 1;
+              longestSizeRef.current = longest;
+              const basePx = Math.min(canvasW, canvasH) * 0.12;
+              const unitScale = basePx / longest;
+              unitScaleRef.current = unitScale;
+              wrapper.scale.setScalar(unitScale);
+              wrapper.visible = false;
+              threeSceneRef.current!.add(wrapper);
+              shoeRef.current = wrapper;
+              const shadowGeom = new THREE.CircleGeometry(18, 32);
+              const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 });
+              const shadow = new THREE.Mesh(shadowGeom, shadowMat);
+              shadow.rotation.x = Math.PI / 2;
+              shadow.visible = false;
+              threeSceneRef.current!.add(shadow);
+              shadowRef.current = shadow;
+              setShoeLoadError(null);
+            }, undefined, (err2) => {
+              console.error('Fallback local GLB load error', err2);
+              setShoeLoadError('Failed to load shoe model');
+            });
           });
         } else {
           // Ensure sharpness on DPR changes (e.g., device rotate)
