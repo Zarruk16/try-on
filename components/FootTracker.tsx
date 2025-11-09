@@ -233,6 +233,30 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         if (rightKneeVideoPx) rightKneePx = toCanvas(rightKneeVideoPx.x, rightKneeVideoPx.y);
       }
 
+      // --- START DEBUG DISPLAY ---
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(5, 5, 220, 80);
+      ctx.fillStyle = 'white';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'left';
+      const debug_anchor = targetFoot === 'left' ? leftPx : targetFoot === 'right' ? rightPx : (leftPx || rightPx);
+      const debug_detected = !!debug_anchor;
+      ctx.fillText(`detected: ${debug_detected}`, 10, 20);
+      if (debug_anchor) {
+        ctx.fillText(`anchor: ${Math.round(debug_anchor.x)}, ${Math.round(debug_anchor.y)}`, 10, 35);
+      } else {
+        ctx.fillText(`anchor: null`, 10, 35);
+      }
+      if (shoeRef.current) {
+        ctx.fillText(`shoe visible: ${shoeRef.current.visible}`, 10, 50);
+        ctx.fillText(`shoe pos: ${shoeRef.current.position.x.toFixed(0)}, ${shoeRef.current.position.y.toFixed(0)}`, 10, 65);
+      } else {
+        ctx.fillText(`shoeRef: null`, 10, 50);
+      }
+      ctx.restore();
+      // --- END DEBUG DISPLAY ---
+
       if (targetFoot === 'left') {
         rightPx = null;
       } else if (targetFoot === 'right') {
@@ -302,6 +326,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             placeY = prev.y * 0.65 + placeY * 0.35;
           }
           lastShoePosRef.current = { x: placeX, y: placeY };
+
           // Debug anchor/direction overlay (toggle with debugDrawAnchor)
           if (debugDrawAnchor) {
             ctx.save();
@@ -376,15 +401,19 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         { video: true, audio: false },
       ];
       let stream: MediaStream | null = null;
+      let lastError: any = null;
       for (const c of attempts) {
         try {
           stream = await navigator.mediaDevices.getUserMedia(c);
+          lastError = null; // Clear error on success
           break;
         } catch (e) {
+          lastError = e;
           console.warn('getUserMedia failed for constraints', c, e);
         }
       }
-      if (!stream) throw new Error('Unable to access camera');
+      if (lastError) throw lastError; // Throw the actual error from the last attempt
+      if (!stream) throw new Error('Unable to access camera'); // Fallback
 
       videoEl.srcObject = stream;
       videoEl.muted = true;
