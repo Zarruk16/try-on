@@ -5,6 +5,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Button } from "@/components/ui/button";
+import { reportError, log } from "@/lib/monitor";
 
 interface ArSceneProps {
   isCameraFlipped?: boolean;
@@ -51,20 +52,20 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
 
   // Handle tap-to-place selection
   function onSelect() {
-    console.log('Selection event triggered');
+    log('info', 'Selection event triggered');
     if (modelRef.current && markerRef.current?.visible) {
-      console.log('Placing model at marker position');
+      log('info', 'Placing model at marker position');
       modelRef.current.position.copy(markerRef.current.position);
       modelRef.current.quaternion.copy(markerRef.current.quaternion);
       modelRef.current.visible = true;
       hasPlacedRef.current = true;
       setHasPlaced(true);
-      console.log('Model placed at:', {
+      log('info', 'Model placed', {
         position: modelRef.current.position,
         visible: modelRef.current.visible
       });
     } else {
-      console.log('Cannot place model:', {
+      log('warn', 'Cannot place model', {
         modelExists: !!modelRef.current,
         markerVisible: markerRef.current?.visible
       });
@@ -80,8 +81,8 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
       if (hitTestResults.length > 0) {
         // Prefer hit closest to anchor hint in NDC if available
         let hit = hitTestResults[0];
-        if (anchorHintNDC && renderer.xr.isPresenting) {
-          const xrCam = renderer.xr.getCamera();
+        if (anchorHintNDC && (renderer as any).xr.isPresenting) {
+          const xrCam = (renderer as any).xr.getCamera();
           let bestIdx = 0;
           let bestDist = Number.POSITIVE_INFINITY;
           for (let i = 0; i < hitTestResults.length; i++) {
@@ -178,6 +179,27 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
         container.appendChild(renderer.domElement);
         rendererRef.current = renderer;
 
+        // WebGL context loss/restored handling
+        const canvas = renderer.domElement as HTMLCanvasElement;
+        const onLost = (e: Event) => {
+          console.warn('[ArScene] WebGL context lost');
+          e.preventDefault();
+        };
+        const onRestored = () => {
+          console.warn('[ArScene] WebGL context restored');
+          const w = container.clientWidth;
+          const h = container.clientHeight;
+          renderer.setSize(w, h);
+          if (cameraRef.current) {
+            cameraRef.current.aspect = w / h;
+            cameraRef.current.updateProjectionMatrix();
+          }
+        };
+        canvas.addEventListener('webglcontextlost', onLost, false);
+        canvas.addEventListener('webglcontextrestored', onRestored, false);
+        (renderer as any).__onLost = onLost;
+        (renderer as any).__onRestored = onRestored;
+
         // Attach controller for tap-to-place
         const controller = renderer.xr.getController(0);
         controller.addEventListener('select', onSelect);
@@ -263,11 +285,11 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
           }
         }
       } catch (err) {
-        console.error('Hit test source error:', err);
+        reportError('Hit test source error', err);
         setErrorMessage('Could not initialize hit testing.');
       }
     } catch (err) {
-      console.error('Failed to start AR session:', err);
+      reportError('Failed to start AR session', err);
       setErrorMessage('Could not start AR session.');
     }
   };
@@ -287,7 +309,7 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
           setErrorMessage('AR is not supported on your device.');
         }
       }).catch((error) => {
-        console.error('Error checking AR support:', error);
+        reportError('Error checking AR support', error);
         setErrorMessage('Error checking AR support.');
       });
     } else {
@@ -302,28 +324,12 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-    camera.position.z = 0.1;
+    const camera = new THREE.PerspectiveCamera(55, width / height, 0.05, 2000);
+    camera.position.set(0, 0, 1);
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true,
-      alpha: true,
-      powerPreference: 'high-performance',
-    });
-    renderer.setSize(width, height);
-    // Reduce internal resolution to fight camera lag on mobile AR
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.shadowMap.enabled = false;
-    renderer.xr.enabled = true;
-    container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
-
-    const controller = renderer.xr.getController(0);
-    controller.addEventListener('select', onSelect);
-    scene.add(controller);
-    controllerRef.current = controller;
+    // Do not create renderer until AR session starts to avoid idle WebGL context
 
     // Create marker
     const markerGroup = new THREE.Group();
@@ -354,27 +360,16 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
     outline.scale.set(0.2, 0.2, 0.2);
     markerGroup.add(outline);
 
-    const pulseAnimation = () => {
-      if (markerRef.current) {
-        const scale = 1 + Math.sin(Date.now() * 0.005) * 0.1;
-        markerRef.current.scale.set(scale, scale, scale);
-        const opacity = 0.5 + Math.sin(Date.now() * 0.005) * 0.2;
-        markerRef.current.children.forEach(child => {
-          if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
-            child.material.opacity = opacity;
-          }
-        });
-      }
-    };
+    // Pulse animation defined at top-level
 
     markerGroup.visible = false;
     scene.add(markerGroup);
     markerRef.current = markerGroup;
 
     // Add lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.15);
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
     directionalLight.position.set(5, 5, 5);
     scene.add(directionalLight);
 
@@ -393,12 +388,12 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
     dracoLoader.setDecoderConfig({ type: 'js' });
     loader.setDRACOLoader(dracoLoader);
     loader.setMeshoptDecoder(MeshoptDecoder);
-    const url = modelUrl && modelUrl.trim().length > 0 ? modelUrl : '/model/sneaker.glb';
-    console.log('Starting to load model from URL:', url);
+    const url = modelUrl && modelUrl.trim().length > 0 ? modelUrl : '/model/ballerinaShoe.glb';
+    log('info', 'Starting to load model', { url });
     loader.load(
       url,
       (gltf) => {
-        console.log('Model loaded, processing...');
+        log('info', 'Model loaded, processing...');
         const model = gltf.scene;
 
         // --- FIX: Wrapper Group for Centering ---
@@ -410,23 +405,36 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
         model.position.sub(center);
         wrapper.add(model); // Add model to wrapper
         
-        // Apply scale to the wrapper
-        wrapper.scale.set(0.1, 0.1, 0.1);
+        // Apply conservative scale to reduce clipping and ease placement
+        const size = box.getSize(new THREE.Vector3());
+        const longest = Math.max(size.x, size.y, size.z) || 1;
+        const baseScale = 0.12 / longest; // normalized relative scale
+        const s = Math.max(0.08, Math.min(baseScale, 0.18));
+        wrapper.scale.setScalar(s);
+
+        // Ensure meshes don't get frustum culled
+        wrapper.traverse((obj: any) => {
+          if (obj.isMesh) {
+            obj.frustumCulled = false;
+            obj.castShadow = false;
+            obj.receiveShadow = false;
+          }
+        });
         
         // Add wrapper to scene and store wrapper in ref
         scene.add(wrapper);
         modelRef.current = wrapper; // <-- Store the wrapper, not the model
-        console.log('Model (wrapped) added to scene successfully');
+        log('info', 'Model (wrapped) added to scene successfully');
 
         // --- FIX: Race Condition Check ---
         // Check if AR is ALREADY active when the model finishes loading
         if (rendererRef.current?.xr.isPresenting) {
-          console.log('Model loaded during active AR session. Hiding.');
+          log('info', 'Model loaded during active AR session. Hiding.');
           wrapper.visible = false;
           wrapper.position.set(0, 0, -0.5); // "waiting" position
         } else {
           // If not in AR, show it for the main screen view
-          console.log('Model loaded in non-AR view. Showing.');
+          log('info', 'Model loaded in non-AR view. Showing.');
           wrapper.visible = true;
           wrapper.position.set(0, 0, 0); // Position for non-AR view
           
@@ -436,161 +444,33 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
         }
       },
       (progress) => {
-        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+        {
+          const pct = (progress.loaded / (progress.total || progress.loaded)) * 100;
+          log('info', 'Loading progress', { pct });
+        }
       },
-      (error) => {
-        console.error('Error loading model:', error);
+      (err) => {
+        const msg = (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string')
+          ? err.message
+          : (err && typeof err === 'object' && 'statusText' in err && typeof err.statusText === 'string')
+          ? err.statusText
+          : 'Unknown error';
+        setErrorMessage(`Failed to load model: ${msg}`);
+        reportError('Error loading model', err);
+        log('error', 'Model failed to load', { error: msg });
       }
     );
 
-    // Handle AR session
-    renderer.xr.addEventListener('sessionstart', () => {
-      console.log('AR session started');
-      setIsARSessionActive(true);
-      onSessionChange?.(true);
-      hitTestSourceRequestedRef.current = false;
-      hasPlacedRef.current = false;
-      setHasPlaced(false);
-      autoPlaceStartRef.current = null;
-      
-      if (modelRef.current) {
-        console.log('Resetting model for AR session');
-        modelRef.current.visible = false;
-        modelRef.current.position.set(0, 0, -0.5);
-      } else {
-        console.warn('Model not available during AR session start');
-      }
-    });
+    // Session lifecycle handlers attached during AR start
 
-    renderer.xr.addEventListener('sessionend', () => {
-      console.log('AR session ended');
-      setIsARSessionActive(false);
-      onSessionChange?.(false);
-      hasPlacedRef.current = false;
-      setHasPlaced(false);
-      if (modelRef.current) {
-        modelRef.current.visible = true;
-        // Position for non-AR view
-        modelRef.current.position.set(0, 0, 0); 
-        modelRef.current.rotation.set(0, 0, 0);
-        camera.position.set(0, 0, 1);
-        camera.lookAt(modelRef.current.position);
-      }
-      if (markerRef.current) {
-        markerRef.current.visible = false;
-      }
-    });
+    // onSelect defined at top-level
 
-    function onSelect() {
-      console.log('Selection event triggered');
-      if (modelRef.current && markerRef.current?.visible) {
-        console.log('Placing model at marker position');
-        modelRef.current.position.copy(markerRef.current.position);
-        modelRef.current.quaternion.copy(markerRef.current.quaternion);
-        
-        modelRef.current.visible = true;
-        // modelRef.current.position.y += 0.05; // Optional: lift slightly
-        hasPlacedRef.current = true;
-        setHasPlaced(true);
-        
-        console.log('Model placed at:', {
-          position: modelRef.current.position,
-          visible: modelRef.current.visible
-        });
-      } else {
-        console.log('Cannot place model:', {
-          modelExists: !!modelRef.current,
-          markerVisible: markerRef.current?.visible
-        });
-      }
-    }
-
-    const onXRFrame = (time: number, frame: XRFrame) => {
-      if (hitTestSourceRef.current && markerRef.current && hitTestReferenceSpaceRef.current) {
-        const hitTestResults = frame.getHitTestResults(hitTestSourceRef.current);
-        if (hitTestResults.length > 0) {
-          // If we have an anchor hint (in NDC), prefer the hit whose projected screen position is closest to the hint
-          let hit = hitTestResults[0];
-          if (anchorHintNDC && renderer.xr.isPresenting) {
-            const xrCam = renderer.xr.getCamera();
-            let bestIdx = 0;
-            let bestDist = Number.POSITIVE_INFINITY;
-            for (let i = 0; i < hitTestResults.length; i++) {
-              const pose = hitTestResults[i].getPose(hitTestReferenceSpaceRef.current!);
-              if (!pose) continue;
-              const m = new THREE.Matrix4().fromArray(pose.transform.matrix);
-              const pos = new THREE.Vector3().setFromMatrixPosition(m);
-              const ndc = pos.clone().project(xrCam);
-              const dx = ndc.x - anchorHintNDC.x;
-              const dy = ndc.y - anchorHintNDC.y;
-              const dist = dx * dx + dy * dy;
-              if (dist < bestDist) {
-                bestDist = dist;
-                bestIdx = i;
-              }
-            }
-            hit = hitTestResults[bestIdx];
-          }
-          const pose = hit.getPose(hitTestReferenceSpaceRef.current);
-          if (pose) {
-            markerRef.current.visible = true;
-            const m = new THREE.Matrix4().fromArray(pose.transform.matrix);
-            const p = new THREE.Vector3();
-            const q = new THREE.Quaternion();
-            const s = new THREE.Vector3();
-            m.decompose(p, q, s);
-            // Smooth position and rotation to reduce jitter
-            const alpha = 0.35;
-            if (!prevMarkerPosRef.current) prevMarkerPosRef.current = p.clone();
-            if (!prevMarkerQuatRef.current) prevMarkerQuatRef.current = q.clone();
-            markerRef.current.position.lerpVectors(prevMarkerPosRef.current, p, alpha);
-            // Use instance method for TS compatibility
-            markerRef.current.quaternion.slerpQuaternions(prevMarkerQuatRef.current, q, alpha);
-            prevMarkerPosRef.current.copy(markerRef.current.position);
-            prevMarkerQuatRef.current.copy(markerRef.current.quaternion);
-            markerRef.current.updateMatrixWorld();
-            pulseAnimation();
-
-            // Auto-place after marker is visible for a short time
-            if (!hasPlacedRef.current && modelRef.current) {
-              // Immediate place if external detection requests it
-              if (placeOnDetection) {
-                modelRef.current.position.copy(markerRef.current.position);
-                modelRef.current.quaternion.copy(markerRef.current.quaternion);
-                modelRef.current.visible = true;
-                hasPlacedRef.current = true;
-                setHasPlaced(true);
-              } else {
-                if (autoPlaceStartRef.current == null) {
-                  autoPlaceStartRef.current = time;
-                } else if (time - autoPlaceStartRef.current > 1200) {
-                  modelRef.current.position.copy(markerRef.current.position);
-                  modelRef.current.quaternion.copy(markerRef.current.quaternion);
-                  modelRef.current.visible = true;
-                  hasPlacedRef.current = true;
-                  setHasPlaced(true);
-                }
-              }
-            }
-          }
-        } else {
-          markerRef.current.visible = false;
-          autoPlaceStartRef.current = null;
-        }
-      }
-    };
+    // onXRFrame defined at top-level
 
     // Remove controls to avoid unnecessary overhead during AR
     const controls: OrbitControls | null = null;
 
-    // --- FIX: Animation Loop ---
-    renderer.setAnimationLoop((time, frame) => {
-      if (frame) onXRFrame(time, frame);
-      
-      const isPresenting = renderer.xr.isPresenting;
-      
-      renderer.render(scene, camera);
-    });
+    // Animation loop handled during AR start
 
     const handleResize = () => {
       if (!cameraRef.current || !rendererRef.current || !containerRef.current) return;
@@ -605,19 +485,38 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
     window.addEventListener('resize', handleResize);
 
     // Cleanup
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (controllerRef.current) {
-        controllerRef.current.removeEventListener('select', onSelect);
-      }
-      if (containerRef.current && rendererRef.current) {
-        // Check if parentNode exists before removing
-        if (containerRef.current.contains(rendererRef.current.domElement)) {
-          containerRef.current.removeChild(rendererRef.current.domElement);
-        }
-      }
-      rendererRef.current?.dispose();
-    };
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (controllerRef.current) {
+        controllerRef.current.removeEventListener('select', onSelect);
+      }
+      if (containerRef.current && rendererRef.current) {
+        // Check if parentNode exists before removing
+        if (containerRef.current.contains(rendererRef.current.domElement)) {
+          containerRef.current.removeChild(rendererRef.current.domElement);
+        }
+      }
+      if (rendererRef.current) {
+        try {
+          const canvas = rendererRef.current.domElement as HTMLCanvasElement;
+          canvas.removeEventListener('webglcontextlost', (rendererRef.current as any).__onLost);
+          canvas.removeEventListener('webglcontextrestored', (rendererRef.current as any).__onRestored);
+        } catch {}
+        rendererRef.current?.dispose();
+      }
+      if (sceneRef.current) {
+        sceneRef.current.traverse((obj: any) => {
+          if (obj.isMesh) {
+            obj.geometry?.dispose?.();
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach((m: any) => m?.dispose?.());
+            } else {
+              obj.material?.dispose?.();
+            }
+          }
+        });
+      }
+    };
   }, [isCameraFlipped, isARSupported, modelUrl, placeOnDetection, anchorHintNDC]);
 
   return (

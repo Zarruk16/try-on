@@ -24,4 +24,4 @@ export default function ModelViewer({ modelPath }: { modelPath: string }) {
 // Preload convenience for snappy UX when the page loads
 // (optional; not strictly required)
 // @ts-ignore
-useGLTF.preload?.('/model/sneaker.glb');
+useGLTF.preload?.('/model/ballerinaShoe.glb');

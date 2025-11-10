@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const isProd = process.env.NODE_ENV === 'production';
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -14,18 +16,17 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(self)'
           },
-          {
-            key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
-          },
-          {
-            key: 'Cross-Origin-Embedder-Policy',
-            value: 'require-corp',
-          },
-          {
-            key: 'Cross-Origin-Resource-Policy',
-            value: 'cross-origin',
-          },
+          // COOP/COEP can crash pages under tunnels like trycloudflare.
+          // Enable strict isolation only in production.
+          ...(isProd ? [
+            { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+            { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+            { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+          ] : [
+            { key: 'Cross-Origin-Opener-Policy', value: 'unsafe-none' },
+            { key: 'Cross-Origin-Embedder-Policy', value: 'unsafe-none' },
+            { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+          ]),
         ],
       },
     ];

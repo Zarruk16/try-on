@@ -1,17 +1,24 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { getBase64 } from './base64Sources';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 export type ShoeKind = 'left' | 'right' | 'single';
 
-// Paths kept for reference, but we primarily parse from base64 code now
-const MODEL_PATHS: Record<ShoeKind, string> = {
-  left: '/model/left-foot-sneaker.glb',
-  right: '/model/right-foot-sneaker.glb',
-  single: '/model/sneaker.glb',
+// Default lightweight demo models from vendor project (stream-loaded via URL)
+const DEMO_MODEL_PATHS: Record<ShoeKind, string> = {
+  left: '/model/vansShoe.glb',
+  right: '/model/vansShoe.glb',
+  single: '/model/ballerinaShoe.glb',
 };
 
 const loader = new GLTFLoader();
+loader.setCrossOrigin('anonymous');
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+dracoLoader.setDecoderConfig({ type: 'js' });
+loader.setDRACOLoader(dracoLoader);
+loader.setMeshoptDecoder(MeshoptDecoder);
 const cache = new Map<ShoeKind, THREE.Object3D>();
 
 function configureModel(root: THREE.Object3D) {
@@ -28,29 +35,24 @@ function configureModel(root: THREE.Object3D) {
 export async function preload(kind: ShoeKind): Promise<void> {
   if (cache.has(kind)) return;
   try {
-    const dataUri = await getBase64(kind);
-    const base64 = dataUri.split(',')[1];
-    // eslint-disable-next-line no-undef
-    const binaryString = atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-    const arrayBuffer = bytes.buffer;
+    // Allow env override to load external models (e.g., your custom GLB URLs)
+    const override = (
+      kind === 'left' ? process.env.NEXT_PUBLIC_MODEL_URL_LEFT :
+      kind === 'right' ? process.env.NEXT_PUBLIC_MODEL_URL_RIGHT :
+      process.env.NEXT_PUBLIC_MODEL_URL_SINGLE
+    );
+    const url = (override && override.trim().length > 0)
+      ? override
+      : DEMO_MODEL_PATHS[kind];
     const gltf: any = await new Promise((resolve, reject) => {
-      loader.parse(arrayBuffer, '', resolve, reject);
-    });
-    const root: THREE.Object3D = gltf.scene || gltf.scenes?.[0] || gltf;
-    configureModel(root);
-    cache.set(kind, root);
-  } catch (err) {
-    // Fallback: try direct URL load from public if parse fails
-    const url = MODEL_PATHS[kind];
-    const gltf = await new Promise<any>((resolve, reject) => {
       loader.load(url, resolve, undefined, reject);
     });
     const root: THREE.Object3D = gltf.scene || gltf.scenes?.[0] || gltf;
     configureModel(root);
     cache.set(kind, root);
+  } catch (err) {
+    console.error('[models/registry] Failed to load model', { kind, err });
+    throw err;
   }
 }
 

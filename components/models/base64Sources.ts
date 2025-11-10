@@ -1,9 +1,9 @@
 import type { ShoeKind } from './registry';
 
 const PATHS: Record<ShoeKind, string> = {
-  left: '/model/left-foot-sneaker.glb',
-  right: '/model/right-foot-sneaker.glb',
-  single: '/model/sneaker.glb',
+  left: '/model/vansShoe.glb',
+  right: '/model/vansShoe.glb',
+  single: '/model/ballerinaShoe.glb',
 };
 
 const b64Cache = new Map<ShoeKind, string>();

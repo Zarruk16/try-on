@@ -67,7 +67,7 @@ There is no TensorFlow/MoveNet dependency anymore; all inference is performed by
 This repository uses Three.js and React Three Fiber to load, initialize, and render GLTF (`.glb`) models. Below are the key integration points:
 
 - Model loading
-  - `components/ArScene.tsx`: uses `GLTFLoader`, `DRACOLoader`, and `MeshoptDecoder` to fetch and parse models, defaulting to `/model/sneaker.glb` unless `modelUrl` is provided.
+- `components/ArScene.tsx`: uses `GLTFLoader`, `DRACOLoader`, and `MeshoptDecoder` to fetch and parse models, defaulting to `/model/ballerinaShoe.glb` unless `modelUrl` is provided.
   - `components/ModelViewer.tsx`: uses `@react-three/drei` `useGLTF` to load models into a standard R3F scene.
   - Backblaze B2: `lib/b2.ts` and API routes generate presigned URLs for remote `.glb` assets.
 
@@ -106,3 +106,4 @@ cloudflared tunnel --url http://localhost:3000
 ```
 After that the local tunnel will provide a url. click that and get the password form the link.
 Which is inside the url. Example[https://ear-quantities-seat.trycloudflare.com]
+
