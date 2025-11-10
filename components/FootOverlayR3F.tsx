@@ -26,6 +26,7 @@ function Shoe({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
+  const previousRootRef = useRef<THREE.Object3D | null>(null);
   const longestRef = useRef<number>(1);
   const scaleRef = useRef<number>(1);
   const rotZRef = useRef<number>(0);
@@ -48,14 +49,44 @@ function Shoe({
       const unitScale = basePx / longest;
       scaleRef.current = unitScale;
       if (!mounted) return;
+      // Dispose previous cloned model if any
+      if (previousRootRef.current) {
+        previousRootRef.current.traverse((obj: any) => {
+          if (obj.isMesh) {
+            obj.geometry?.dispose?.();
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach((m: any) => m?.dispose?.());
+            } else {
+              obj.material?.dispose?.();
+            }
+          }
+        });
+      }
       setRoot(model);
+      previousRootRef.current = model;
       if (groupRef.current) {
         groupRef.current.scale.setScalar(unitScale);
         // Base tilt so shoe lies on screen plane and faces camera
         groupRef.current.rotation.set(Math.PI / 2, 0, 0);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      // Cleanup cloned model resources
+      const current = previousRootRef.current;
+      if (current) {
+        current.traverse((obj: any) => {
+          if (obj.isMesh) {
+            obj.geometry?.dispose?.();
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach((m: any) => m?.dispose?.());
+            } else {
+              obj.material?.dispose?.();
+            }
+          }
+        });
+      }
+    };
   }, [shoeKind, canvasW, canvasH]);
 
   useFrame(() => {
@@ -143,10 +174,31 @@ export default function FootOverlayR3F({
     <Canvas
       key={key}
       orthographic
-      gl={{ alpha: true, antialias: true }}
+      gl={{ alpha: true, antialias: false, powerPreference: 'high-performance' }}
+      onCreated={({ gl }) => {
+        // Ensure WebGL clear is fully transparent so underlying HTML video shows
+        gl.setClearColor(0x000000, 0);
+        // Handle WebGL context loss/restored to avoid hard crashes
+        const canvas = gl.domElement as HTMLCanvasElement;
+        const onLost = (e: Event) => {
+          console.warn('[FootOverlayR3F] WebGL context lost');
+          e.preventDefault();
+        };
+        const onRestored = () => {
+          console.warn('[FootOverlayR3F] WebGL context restored');
+        };
+        canvas.addEventListener('webglcontextlost', onLost, false);
+        canvas.addEventListener('webglcontextrestored', onRestored, false);
+        // Return cleanup for R3F onCreated
+        (gl as any).__foot_overlay_cleanup__ = () => {
+          canvas.removeEventListener('webglcontextlost', onLost);
+          canvas.removeEventListener('webglcontextrestored', onRestored);
+        };
+      }}
       dpr={1}
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', background: 'transparent' }}
     >
+      {/** transparent background to let HTML video show underneath; no scene background */}
       {/* Lighting */}
       <ambientLight args={[0xffffff, 1.2]} />
       <directionalLight position={[0, 0, 10]} args={[0xffffff, 0.8]} />

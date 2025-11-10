@@ -299,11 +299,27 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       videoEl.srcObject = stream;
       videoEl.muted = true;
       (videoEl as any).playsInline = true;
-      await videoEl.play();
+      videoEl.autoplay = true;
+      // Ensure video starts reliably; handle promise rejections
+      try {
+        await videoEl.play();
+      } catch (e) {
+        console.warn('video.play() rejected, retrying once', e);
+        setTimeout(() => {
+          videoEl.play().catch(err => console.error('video.play() retry failed', err));
+        }, 100);
+      }
       if (!videoEl.videoWidth || !videoEl.videoHeight) {
         await new Promise<void>((resolve) => {
           const onMeta = () => { videoEl.removeEventListener('loadedmetadata', onMeta); resolve(); };
           videoEl.addEventListener('loadedmetadata', onMeta, { once: true });
+        });
+      }
+      // Additional guard: wait for enough readyState for rendering
+      if (videoEl.readyState < 2 /* HAVE_CURRENT_DATA */) {
+        await new Promise<void>((resolve) => {
+          const onCanPlay = () => { videoEl.removeEventListener('canplay', onCanPlay); resolve(); };
+          videoEl.addEventListener('canplay', onCanPlay, { once: true });
         });
       }
 
@@ -511,7 +527,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       className={fullScreen ? 'relative w-screen h-screen' : "absolute top-4 right-4 z-10 bg-black/40 text-white rounded overflow-hidden"}
       style={fullScreen ? { position: 'fixed', inset: 0, zIndex: 1 } : undefined}
     >
-      <video ref={videoRef} playsInline style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: isMirrored ? 'scaleX(-1)' : 'none' }} />
+      <video ref={videoRef} playsInline style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: isMirrored ? 'scaleX(-1)' : 'none', backgroundColor: 'transparent' }} />
       <canvas
         ref={canvasRef}
         className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "w-[320px] h-[240px]"}
