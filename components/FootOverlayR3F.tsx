@@ -29,6 +29,8 @@ function Shoe({
   const longestRef = useRef<number>(1);
   const scaleRef = useRef<number>(1);
   const rotZRef = useRef<number>(0);
+  const yawDeg = typeof process !== 'undefined' ? Number(process.env.NEXT_PUBLIC_SHOE_YAW_DEG || 0) : 0;
+  const yawRad = (yawDeg * Math.PI) / 180;
 
   useEffect(() => {
     let mounted = true;
@@ -62,17 +64,7 @@ function Shoe({
     const g = groupRef.current;
     if (!g) return;
     if (!anchor) {
-      // Fallback: show model centered so users can confirm it loaded.
-      const placeX = canvasW / 2;
-      const placeY = canvasH / 2;
-      const worldY = canvasH - placeY;
-      g.position.set(placeX, worldY, 0);
-      const desiredScale = (Math.min(canvasW, canvasH) * 0.12) / (longestRef.current || 1);
-      const prev = scaleRef.current || desiredScale;
-      const smoothScale = prev * 0.9 + desiredScale * 0.1;
-      scaleRef.current = smoothScale;
-      g.scale.setScalar(smoothScale);
-      g.visible = !!root;
+      g.visible = false;
       return;
     }
     // Foot size calibration: infer foot length and smooth scale
@@ -104,7 +96,7 @@ function Shoe({
       const corrected = mirrored ? -ang : ang;
       const blended = rotZRef.current * 0.7 + corrected * 0.3;
       rotZRef.current = blended;
-      g.rotation.z = blended;
+      g.rotation.z = blended + yawRad;
     }
   });
 
@@ -143,10 +135,11 @@ export default function FootOverlayR3F({
     <Canvas
       key={key}
       orthographic
-      gl={{ alpha: true, antialias: true }}
+      gl={{ alpha: true, antialias: false, powerPreference: 'high-performance' }}
       dpr={1}
-      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', background: 'transparent' }}
+      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
     >
+      <color attach="background" args={[0, 0, 0]} />
       {/* Lighting */}
       <ambientLight args={[0xffffff, 1.2]} />
       <directionalLight position={[0, 0, 10]} args={[0xffffff, 0.8]} />
