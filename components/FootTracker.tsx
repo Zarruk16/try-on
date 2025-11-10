@@ -439,12 +439,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           const worldY = canvasH - placeY;
           model.position.set(placeX, worldY, 0);
           model.visible = true;
-          // Enlarge shoe with a stable scale factor relative to base
-          const basePx = Math.min(canvasW, canvasH) * 0.12;
-          const scalePx = basePx * 1.6; // enlarge 60% to avoid tiny rendering
-          // Apply scale in pixels via precomputed unit scale
-          const s = unitScaleRef.current * (scalePx / basePx);
-          model.scale.setScalar(s);
+          // Keep scale stable; we already set a unit scale at load/resize
+          // Avoid per-frame rescaling which can push model off-screen on some devices
 
           // Rotation based on best available direction (toe -> knee -> anchor), with light decay
           if (footDir && (footDir !== anchor)) {
@@ -461,7 +457,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           if (shadowRef.current) {
             shadowRef.current.position.set(placeX, worldY, -0.5);
             shadowRef.current.visible = true;
-            const shadowScale = (scalePx / 1000) * 120;
+            const shadowScale = (scale / 1000) * 120;
             shadowRef.current.scale.set(shadowScale, shadowScale, shadowScale);
           }
         } else {
@@ -716,8 +712,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           ? "absolute top-0 left-0 w-screen h-screen pointer-events-none"
           : "absolute top-0 left-0 w-[320px] h-[240px] pointer-events-none"}
         style={fullScreen
-          ? { display: 'block', zIndex: 2 as any }
-          : { display: 'block', zIndex: 2 as any }}
+          ? { display: 'block', zIndex: 10 as any }
+          : { display: 'block', zIndex: 10 as any }}
       />
       {cameraError && (
         <div className="fixed inset-x-0 bottom-6 mx-auto w-[92%] max-w-xl z-20 bg-white/95 text-black shadow rounded p-4 space-y-3">
