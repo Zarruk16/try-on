@@ -34,7 +34,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const debugDisableZoom = false; // set true to disable container zoom for debugging
   const PIVOT_BIAS_PX = 12; // small toe-ward bias to calibrate GLB origin
   const debugDrawAnchor = false; // draw cyan anchor->placement overlay when true
-  const missThreshold = 6; // frames before switching to crop mode
+  const missThreshold = 3; // frames before switching to crop mode
   const [detectMode, setDetectMode] = useState<'full' | 'crop'>('full');
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
   const webglCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -77,7 +77,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
     const drawOverlay = (poses: poseDetection.Pose[] | null) => {
       const videoW = videoEl.videoWidth;
       const videoH = videoEl.videoHeight;
-      const POS_ALPHA = activeModelType === 'LIGHTNING' ? 0.35 : 0.5; // ankle smoothing
+      const POS_ALPHA = activeModelType === 'LIGHTNING' ? 0.25 : 0.4; // ankle smoothing
 
       const canvasW = fullScreen ? window.innerWidth : 320;
       const canvasH = fullScreen ? window.innerHeight : 240;
@@ -412,10 +412,13 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             // Forward/lateral offsets scale with canvas size for consistent feel
             const base = Math.min(canvasW, canvasH);
             const forwardPx = base * 0.06;  // ~6% of min dimension
-            const lateralPx = base * 0.01;  // ~1% sideways nudge
+            const lateralPx = base * 0.005; // reduce sideways nudge
             // Rotate offset into canvas coords (Y down)
             placeX += nx * forwardPx - ny * lateralPx;
             placeY += ny * forwardPx + nx * lateralPx;
+            // Calibrate pivot slightly toward toes to align GLB origin
+            placeX += nx * PIVOT_BIAS_PX;
+            placeY += ny * PIVOT_BIAS_PX;
           }
           lastShoePosRef.current = { x: placeX, y: placeY };
 
@@ -598,7 +601,24 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         try {
           let poses: poseDetection.Pose[] | null = null;
           if (detectMode === 'full') {
-            poses = await detector.estimatePoses(videoEl, { flipHorizontal: isMirrored });
+            // Downscale full frame for faster inference; map keypoints back to video space
+            const vw = videoEl.videoWidth, vh = videoEl.videoHeight;
+            if (!offscreenRef.current) offscreenRef.current = document.createElement('canvas');
+            const dCanvas = offscreenRef.current;
+            const maxDim = 256;
+            const scale = Math.min(maxDim / vw, maxDim / vh);
+            dCanvas.width = Math.max(1, Math.round(vw * scale));
+            dCanvas.height = Math.max(1, Math.round(vh * scale));
+            const dctx = dCanvas.getContext('2d')!;
+            dctx.drawImage(videoEl, 0, 0, dCanvas.width, dCanvas.height);
+            poses = await detector.estimatePoses(dCanvas, { flipHorizontal: isMirrored });
+            if (poses && poses[0]?.keypoints) {
+              poses[0].keypoints = poses[0].keypoints.map(k => ({
+                ...k,
+                x: (k.x / dCanvas.width) * vw,
+                y: (k.y / dCanvas.height) * vh,
+              }));
+            }
           } else {
             // Bottom-crop fallback when ankles are missed
             const vw = videoEl.videoWidth, vh = videoEl.videoHeight;
@@ -641,7 +661,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         const dt = performance.now() - t0;
         avgTime = avgTime * 0.8 + dt * 0.2;
         // If heavy model is too slow, switch to Lightning once
-        if (accuracy !== 'lite' && activeModelType === 'THUNDER' && avgTime > 45) {
+        if (accuracy !== 'lite' && activeModelType === 'THUNDER' && avgTime > 40) {
           try {
             detector?.dispose();
             const lt = poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING;
