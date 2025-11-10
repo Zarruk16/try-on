@@ -11,6 +11,12 @@ const MODEL_PATHS: Record<ShoeKind, string> = {
 };
 
 const loader = new GLTFLoader();
+// Allow cross-origin requests if your production domain serves models via CDN
+// (same-origin models ignore this setting).
+// Some proxies/CDNs require explicit anonymous CORS to avoid fetch rejection.
+// This is safe for public GLB assets.
+// @ts-ignore - underlying Loader exposes setCrossOrigin
+loader.setCrossOrigin?.('anonymous');
 const cache = new Map<ShoeKind, THREE.Object3D>();
 
 function configureModel(root: THREE.Object3D) {
@@ -28,7 +34,10 @@ export async function preload(kind: ShoeKind): Promise<void> {
   if (cache.has(kind)) return;
   const url = MODEL_PATHS[kind];
   const gltf = await new Promise<any>((resolve, reject) => {
-    loader.load(url, resolve, undefined, reject);
+    loader.load(url, resolve, undefined, (err) => {
+      console.error(`GLB load failed for ${url}`, err);
+      reject(err);
+    });
   });
   const root: THREE.Object3D = gltf.scene || gltf.scenes?.[0] || gltf;
   configureModel(root);

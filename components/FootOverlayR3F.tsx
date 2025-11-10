@@ -62,7 +62,17 @@ function Shoe({
     const g = groupRef.current;
     if (!g) return;
     if (!anchor) {
-      g.visible = false;
+      // Fallback: show model centered so users can confirm it loaded.
+      const placeX = canvasW / 2;
+      const placeY = canvasH / 2;
+      const worldY = canvasH - placeY;
+      g.position.set(placeX, worldY, 0);
+      const desiredScale = (Math.min(canvasW, canvasH) * 0.12) / (longestRef.current || 1);
+      const prev = scaleRef.current || desiredScale;
+      const smoothScale = prev * 0.9 + desiredScale * 0.1;
+      scaleRef.current = smoothScale;
+      g.scale.setScalar(smoothScale);
+      g.visible = !!root;
       return;
     }
     // Foot size calibration: infer foot length and smooth scale
@@ -134,7 +144,7 @@ export default function FootOverlayR3F({
       key={key}
       orthographic
       gl={{ alpha: true, antialias: true }}
-      dpr={[1, 2]}
+      dpr={1}
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', background: 'transparent' }}
     >
       {/* Lighting */}

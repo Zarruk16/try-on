@@ -79,6 +79,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       return { x: prev.x * (1 - alpha) + curr.x * alpha, y: prev.y * (1 - alpha) + curr.y * alpha };
     };
     let lastDetectTime = performance.now();
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     const drawOverlay = (poses: poseDetection.Pose[] | null) => {
       const videoW = videoEl.videoWidth;
@@ -327,6 +328,11 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       videoEl.style.height = '100%';
       (videoEl.style as any).objectFit = 'cover';
       // Mirror is applied via JSX style; avoid duplicating transform here
+
+      // Initialize overlay size early so R3F has valid camera dims before first frame
+      const initW = fullScreen ? window.innerWidth : 320;
+      const initH = fullScreen ? window.innerHeight : 240;
+      setOverlaySize({ w: initW, h: initH });
     };
 
     const init = async () => {
@@ -339,6 +345,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         const canvasH = fullScreen ? window.innerHeight : 240;
         canvasEl.width = canvasW;
         canvasEl.height = canvasH;
+        // Ensure overlay camera updates even when camera is denied
+        setOverlaySize({ w: canvasW, h: canvasH });
         ctx.clearRect(0, 0, canvasW, canvasH);
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, canvasW, canvasH);
@@ -365,15 +373,26 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
 
       await tf.setBackend('webgl');
       await tf.ready();
-      // Prefer Thunder for accuracy; allow Lightning fallback when needed
-      const mt = accuracy === 'lite'
-        ? (poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING)
-        : (poseDetection.movenet.modelType.SINGLEPOSE_THUNDER);
+      // Prefer Lightning by default on mobile for real-time responsiveness
+      const effAcc: 'lite' | 'full' | 'heavy' = (accuracy === 'full' && isMobile) ? 'lite' : accuracy;
+      const mt = effAcc === 'lite'
+        ? poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+        : poseDetection.movenet.modelType.SINGLEPOSE_THUNDER;
       detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
         modelType: mt,
         enableSmoothing: true,
       });
       setActiveModelType(mt === poseDetection.movenet.modelType.SINGLEPOSE_THUNDER ? 'THUNDER' : 'LIGHTNING');
+
+      // Warm-up inference once to prime caches and reduce first-frame latency
+      try {
+        const warm = document.createElement('canvas');
+        warm.width = 64; warm.height = 64;
+        const wctx = warm.getContext('2d')!;
+        wctx.fillStyle = 'black';
+        wctx.fillRect(0, 0, warm.width, warm.height);
+        await detector.estimatePoses(warm, { flipHorizontal: false });
+      } catch {}
 
       running = true;
       let missCount = 0;
@@ -393,7 +412,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             const vw = videoEl.videoWidth, vh = videoEl.videoHeight;
             if (!offscreenRef.current) offscreenRef.current = document.createElement('canvas');
             const dCanvas = offscreenRef.current;
-            const maxDim = 256;
+            const maxDim = isMobile ? 192 : 256;
             const scale = Math.min(maxDim / vw, maxDim / vh);
             dCanvas.width = Math.max(1, Math.round(vw * scale));
             dCanvas.height = Math.max(1, Math.round(vh * scale));
