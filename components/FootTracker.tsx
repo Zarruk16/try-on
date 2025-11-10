@@ -4,6 +4,7 @@ import * as poseDetection from '@tensorflow-models/pose-detection';
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
 import * as THREE from 'three';
+import FootOverlayR3F from './FootOverlayR3F';
 // Model loading handled via local registry
 
 export interface AnkleCoords {
@@ -18,9 +19,10 @@ interface FootTrackerProps {
   targetFoot?: TargetFoot;
   accuracy?: 'lite' | 'full' | 'heavy';
   showHud?: boolean;
+  shoeKind?: 'left' | 'right' | 'single';
 }
 
-export default function FootTracker({ onDetect, fullScreen = false, targetFoot = 'any', accuracy = 'full', showHud = false }: FootTrackerProps) {
+export default function FootTracker({ onDetect, fullScreen = false, targetFoot = 'any', accuracy = 'full', showHud = false, shoeKind }: FootTrackerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -34,6 +36,12 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const debugDrawAnchor = false; // draw cyan anchor->placement overlay when true
   const missThreshold = 3; // frames before switching to crop mode
   const [detectMode, setDetectMode] = useState<'full' | 'crop'>('full');
+  const [overlaySize, setOverlaySize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  const [overlayAnchors, setOverlayAnchors] = useState<{
+    anchor: { x: number; y: number } | null;
+    toe: { x: number; y: number } | null;
+    knee: { x: number; y: number } | null;
+  }>({ anchor: null, toe: null, knee: null });
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
   const webglCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const threeRendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -85,101 +93,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         lastCanvasW = canvasW;
         lastCanvasH = canvasH;
 
-        // Init or resize three.js overlay to match canvas
-        const webglEl = webglCanvasRef.current!;
-        if (!threeRendererRef.current) {
-          const renderer = new THREE.WebGLRenderer({ canvas: webglEl, alpha: true, antialias: true });
-          renderer.setPixelRatio(window.devicePixelRatio);
-          renderer.setSize(canvasW, canvasH);
-          renderer.setClearColor(0x000000, 0);
-          // Use sRGB for correct PBR rendering
-          (renderer as any).outputColorSpace = (THREE as any).SRGBColorSpace;
-          threeRendererRef.current = renderer;
-
-          const scene = new THREE.Scene();
-          const ambient = new THREE.AmbientLight(0xffffff, 1.2);
-          scene.add(ambient);
-          const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-          dir.position.set(0, 0, 10);
-          scene.add(dir);
-          threeSceneRef.current = scene;
-
-          const cam = new THREE.OrthographicCamera(0, canvasW, canvasH, 0, -1000, 1000);
-          cam.position.set(canvasW / 2, canvasH / 2, 10);
-          cam.lookAt(new THREE.Vector3(canvasW / 2, canvasH / 2, 0));
-          threeCameraRef.current = cam;
-
-          // Load shoe model from local registry (no external storage)
-          const shoeKind = targetFoot === 'left' ? 'left' : (targetFoot === 'right' ? 'right' : 'single');
-          const wrapper = new THREE.Group();
-          (async () => {
-            try {
-              const { getModel, preload } = await import('./models/registry');
-              await preload(shoeKind);
-              const model = await getModel(shoeKind);
-              // Fix texture color space for older GLTFs
-              model.traverse((o: any) => {
-                const mat: any = o?.material;
-                const tex: any = mat?.map;
-                if ((o as any)?.isMesh && mat && tex) {
-                  if ('colorSpace' in tex) tex.colorSpace = (THREE as any).SRGBColorSpace;
-                  if ('encoding' in tex) tex.encoding = (THREE as any).sRGBEncoding;
-                  mat.needsUpdate = true;
-                }
-              });
-              const box = new THREE.Box3().setFromObject(model);
-              const center = box.getCenter(new THREE.Vector3());
-              model.position.sub(center);
-              wrapper.add(model);
-              // Base tilt so shoe lies on screen plane and faces camera
-              wrapper.rotation.set(Math.PI / 2, 0, 0);
-              // Compute unit scale so longest model dimension fits base pixel size
-              const size = box.getSize(new THREE.Vector3());
-              console.info('[FootTracker] GLB size (x,y,z):', size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2));
-              const longest = Math.max(size.x, size.y, size.z) || 1;
-              longestSizeRef.current = longest;
-              const basePx = Math.min(canvasW, canvasH) * 0.12;
-              const unitScale = basePx / longest; // world units -> pixels
-              unitScaleRef.current = unitScale;
-              wrapper.scale.setScalar(unitScale);
-              wrapper.visible = false;
-              threeSceneRef.current!.add(wrapper);
-              shoeRef.current = wrapper;
-
-              // Simple shadow blob under shoe for grounding
-              const shadowGeom = new THREE.CircleGeometry(18, 32);
-              const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 });
-              const shadow = new THREE.Mesh(shadowGeom, shadowMat);
-              shadow.rotation.x = Math.PI / 2;
-              shadow.visible = false;
-              threeSceneRef.current!.add(shadow);
-              shadowRef.current = shadow;
-              setShoeLoadError(null);
-            } catch (e) {
-              console.error('[FootTracker] Failed to load model from registry', e);
-              setShoeLoadError('Failed to load shoe model');
-            }
-          })();
-        } else {
-          // Ensure sharpness on DPR changes (e.g., device rotate)
-          threeRendererRef.current.setPixelRatio(window.devicePixelRatio);
-          threeRendererRef.current.setSize(canvasW, canvasH);
-          if (threeCameraRef.current) {
-            threeCameraRef.current.left = 0;
-            threeCameraRef.current.right = canvasW;
-            // Switch to Y-up; we’ll convert pixel Y when placing
-            threeCameraRef.current.top = canvasH;
-            threeCameraRef.current.bottom = 0;
-            threeCameraRef.current.updateProjectionMatrix();
-            threeCameraRef.current.position.set(canvasW / 2, canvasH / 2, 10);
-          }
-          // If canvas size changed, keep model size consistent by recomputing unit scale
-          if (shoeRef.current && longestSizeRef.current) {
-            const basePx2 = Math.min(canvasW, canvasH) * 0.12;
-            unitScaleRef.current = basePx2 / longestSizeRef.current;
-            shoeRef.current.scale.setScalar(unitScaleRef.current);
-          }
-        }
+        // Update R3F overlay size to match canvas
+        setOverlaySize({ w: canvasW, h: canvasH });
       }
 
       ctx.clearRect(0, 0, canvasW, canvasH);
@@ -337,86 +252,11 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           threeReadyWarnedRef.current = true;
         }
       }
-      if (threeRendererRef.current && threeSceneRef.current && threeCameraRef.current && shoeRef.current) {
+      {
         const anchor = targetFoot === 'left' ? leftPx : targetFoot === 'right' ? rightPx : (leftPx || rightPx);
         const toe = targetFoot === 'left' ? leftToePx : targetFoot === 'right' ? rightToePx : (leftToePx || rightToePx);
         const knee = targetFoot === 'left' ? leftKneePx : targetFoot === 'right' ? rightKneePx : (leftKneePx || rightKneePx);
-        if (anchor) {
-          const model = shoeRef.current;
-          // Place EXACTLY at the ankle anchor (green dot), no offsets
-          let placeX = anchor.x, placeY = anchor.y;
-          const footDir = toe ?? knee ?? anchor;
-          lastShoePosRef.current = { x: placeX, y: placeY };
-
-          // Foot size calibration: infer foot length in pixels and scale shoe accordingly
-          let footLengthPx = 0;
-          if (toe) {
-            footLengthPx = Math.hypot(toe.x - anchor.x, toe.y - anchor.y);
-          } else if (knee) {
-            // Approximate foot length as a fraction of lower leg length
-            const lowerLeg = Math.hypot(knee.x - anchor.x, knee.y - anchor.y);
-            footLengthPx = lowerLeg * 0.42; // empirically reasonable fraction
-          } else {
-            // Fallback to a canvas-relative heuristic
-            footLengthPx = Math.min(canvasW, canvasH) * 0.12;
-          }
-          // Clamp to avoid wild spikes from noisy detections
-          footLengthPx = Math.max(40, Math.min(footLengthPx, Math.min(canvasW, canvasH) * 0.35));
-          if (longestSizeRef.current) {
-            const desiredScale = footLengthPx / longestSizeRef.current;
-            // Smooth scaling to avoid jitter
-            const prev = unitScaleRef.current || desiredScale;
-            const smooth = prev * 0.85 + desiredScale * 0.15;
-            unitScaleRef.current = smooth;
-            model.scale.setScalar(smooth);
-          }
-
-          // Debug anchor/direction overlay (toggle with debugDrawAnchor)
-          if (debugDrawAnchor) {
-            ctx.save();
-            ctx.strokeStyle = '#00E5FF';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(anchor.x, anchor.y);
-            ctx.lineTo(placeX, placeY);
-            ctx.stroke();
-            ctx.fillStyle = '#00E5FF';
-            ctx.fillRect(placeX - 3, placeY - 3, 6, 6);
-            ctx.restore();
-          }
-          // Convert canvas pixel Y (downwards) to Three world Y (upwards)
-          const worldY = canvasH - placeY;
-          model.position.set(placeX, worldY, 0);
-          // Ensure transform is applied if any child disables auto-updates
-          model.updateMatrixWorld(true);
-          model.visible = true;
-          // Keep scale stable; we already set a unit scale at load/resize
-          // Avoid per-frame rescaling which can push model off-screen on some devices
-
-          // Rotation based on best available direction (toe -> knee -> anchor), with light decay
-          if (footDir && (footDir !== anchor)) {
-            const ang = Math.atan2(footDir.y - anchor.y, footDir.x - anchor.x);
-            // Correct angle when video is mirrored so shoe doesn't flip the wrong way
-            const corrected = isMirrored ? -ang : ang;
-            const blended = lastShoeRotRef.current * 0.7 + corrected * 0.3;
-            lastShoeRotRef.current = blended;
-            // Only rotate around Z; preserve base X/Y tilt set at load
-            model.rotation.z = blended;
-            model.updateMatrixWorld(true);
-          }
-
-          // Shadow follows the shoe
-          if (shadowRef.current) {
-            shadowRef.current.position.set(placeX, worldY, -0.5);
-            shadowRef.current.visible = true;
-            const shadowScale = (scale / 1000) * 120;
-            shadowRef.current.scale.set(shadowScale, shadowScale, shadowScale);
-          }
-        } else {
-          shoeRef.current.visible = false;
-          if (shadowRef.current) shadowRef.current.visible = false;
-        }
-        threeRendererRef.current.render(threeSceneRef.current, threeCameraRef.current);
+        setOverlayAnchors({ anchor: anchor || null, toe: toe || null, knee: knee || null });
       }
 
       if (showHud) {
@@ -660,12 +500,17 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       />
       <canvas
         ref={webglCanvasRef}
-        className={fullScreen
-          ? "absolute top-0 left-0 w-screen h-screen pointer-events-none"
-          : "absolute top-0 left-0 w-[320px] h-[240px] pointer-events-none"}
-        style={fullScreen
-          ? { display: 'block', zIndex: 10 as any }
-          : { display: 'block', zIndex: 10 as any }}
+        className="hidden"
+        style={{ display: 'none' }}
+      />
+      <FootOverlayR3F
+        canvasW={overlaySize.w}
+        canvasH={overlaySize.h}
+        shoeKind={shoeKind ?? (targetFoot === 'left' ? 'left' : (targetFoot === 'right' ? 'right' : 'single'))}
+        anchor={overlayAnchors.anchor}
+        toe={overlayAnchors.toe}
+        knee={overlayAnchors.knee}
+        mirrored={isMirrored}
       />
       {cameraError && (
         <div className="fixed inset-x-0 bottom-6 mx-auto w-[92%] max-w-xl z-20 bg-white/95 text-black shadow rounded p-4 space-y-3">
