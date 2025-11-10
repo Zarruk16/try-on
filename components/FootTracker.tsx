@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import * as poseDetection from '@tensorflow-models/pose-detection';
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
-import * as THREE from 'three';
 import FootOverlayR3F from './FootOverlayR3F';
 // Model loading handled via local registry
 
@@ -43,19 +42,9 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
     knee: { x: number; y: number } | null;
   }>({ anchor: null, toe: null, knee: null });
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
-  const webglCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const threeRendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const threeSceneRef = useRef<THREE.Scene | null>(null);
-  const threeCameraRef = useRef<THREE.OrthographicCamera | null>(null);
-  const shoeRef = useRef<THREE.Group | null>(null);
-  const shadowRef = useRef<THREE.Mesh | null>(null);
-  const threeReadyWarnedRef = useRef(false);
   const lastRawLogRef = useRef(0);
   const [shoeLoadError, setShoeLoadError] = useState<string | null>(null);
-  const unitScaleRef = useRef<number>(1); // converts model units to pixels
-  const longestSizeRef = useRef<number | null>(null); // longest GLB dimension for unit->px scaling
-  const lastShoePosRef = useRef<{ x: number; y: number } | null>(null);
-  const lastShoeRotRef = useRef<number>(0);
+  // Legacy Three.js overlay refs removed; R3F handles model rendering now.
   const [activeModelType, setActiveModelType] = useState<'THUNDER' | 'LIGHTNING'>('THUNDER');
 
   useEffect(() => {
@@ -64,8 +53,6 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
     const containerEl = containerRef.current!;
     const ctx = canvasEl.getContext('2d')!;
 
-    // Enable Three.js caching to speed up repeated loads
-    THREE.Cache.enabled = true;
 
     let detector: poseDetection.PoseDetector | null = null;
     let running = false;
@@ -153,35 +140,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         if (rightKneeVideoPx) rightKneePx = toCanvas(rightKneeVideoPx.x, rightKneeVideoPx.y);
       }
 
-      // --- START DEBUG DISPLAY ---
-      ctx.save();
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(5, 5, 260, 120);
-      ctx.fillStyle = 'white';
-      ctx.font = '12px monospace';
-      ctx.textAlign = 'left';
-      const debug_anchor = targetFoot === 'left' ? leftPx : targetFoot === 'right' ? rightPx : (leftPx || rightPx);
-      const debug_detected = !!debug_anchor;
-      ctx.fillText(`detected: ${debug_detected}`, 10, 20);
-      if (debug_anchor) {
-        ctx.fillText(`anchor: ${Math.round(debug_anchor.x)}, ${Math.round(debug_anchor.y)}`, 10, 35);
-      } else {
-        ctx.fillText(`anchor: null`, 10, 35);
-      }
-      // Raw video pixel coords (pre-canvas mapping)
-      const lraw = leftVideoPx ? `${Math.round(leftVideoPx.x)}, ${Math.round(leftVideoPx.y)}` : 'null';
-      const rraw = rightVideoPx ? `${Math.round(rightVideoPx.x)}, ${Math.round(rightVideoPx.y)}` : 'null';
-      ctx.fillText(`L raw: ${lraw}`, 10, 50);
-      ctx.fillText(`R raw: ${rraw}`, 135, 50);
-      if (shoeRef.current) {
-        ctx.fillText(`shoe visible: ${shoeRef.current.visible}`, 10, 80);
-        ctx.fillText(`shoe pos: ${shoeRef.current.position.x.toFixed(0)}, ${shoeRef.current.position.y.toFixed(0)}`, 10, 95);
-      } else {
-        ctx.fillText(`shoeRef: null`, 10, 80);
-      }
-      ctx.fillText(`mode: ${detectMode} • model: ${activeModelType}`, 10, 110);
-      ctx.restore();
-      // --- END DEBUG DISPLAY ---
+      // Debug HUD removed for performance; use bottom badge and console logs.
 
       if (targetFoot === 'left') {
         rightPx = null;
@@ -241,18 +200,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         }
       }
 
-      // Update 3D shoe overlay position
-      if (!(threeRendererRef.current && threeSceneRef.current && threeCameraRef.current && shoeRef.current)) {
-        if (!threeReadyWarnedRef.current) {
-          console.warn('3D overlay not ready', {
-            renderer: !!threeRendererRef.current,
-            scene: !!threeSceneRef.current,
-            camera: !!threeCameraRef.current,
-            shoe: !!shoeRef.current,
-          });
-          threeReadyWarnedRef.current = true;
-        }
-      }
+      // Feed anchors to R3F overlay
       {
         const anchor = targetFoot === 'left' ? leftPx : targetFoot === 'right' ? rightPx : (leftPx || rightPx);
         const toe = targetFoot === 'left' ? leftToePx : targetFoot === 'right' ? rightToePx : (leftToePx || rightToePx);
@@ -533,11 +481,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "w-[320px] h-[240px]"}
         style={fullScreen ? { display: 'block' } : undefined}
       />
-      <canvas
-        ref={webglCanvasRef}
-        className="hidden"
-        style={{ display: 'none' }}
-      />
+      {/* Legacy WebGL canvas removed */}
       <FootOverlayR3F
         canvasW={overlaySize.w}
         canvasH={overlaySize.h}

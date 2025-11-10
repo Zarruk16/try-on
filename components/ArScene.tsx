@@ -35,22 +35,199 @@ export default function ArScene({ isCameraFlipped = false, modelUrl, placeOnDete
   const prevMarkerPosRef = useRef<THREE.Vector3 | null>(null);
   const prevMarkerQuatRef = useRef<THREE.Quaternion | null>(null);
 
+  // Pulse animation for marker visibility feedback
+  const pulseAnimation = () => {
+    if (markerRef.current) {
+      const scale = 1 + Math.sin(Date.now() * 0.005) * 0.1;
+      markerRef.current.scale.set(scale, scale, scale);
+      const opacity = 0.5 + Math.sin(Date.now() * 0.005) * 0.2;
+      markerRef.current.children.forEach(child => {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+          child.material.opacity = opacity;
+        }
+      });
+    }
+  };
+
+  // Handle tap-to-place selection
+  function onSelect() {
+    console.log('Selection event triggered');
+    if (modelRef.current && markerRef.current?.visible) {
+      console.log('Placing model at marker position');
+      modelRef.current.position.copy(markerRef.current.position);
+      modelRef.current.quaternion.copy(markerRef.current.quaternion);
+      modelRef.current.visible = true;
+      hasPlacedRef.current = true;
+      setHasPlaced(true);
+      console.log('Model placed at:', {
+        position: modelRef.current.position,
+        visible: modelRef.current.visible
+      });
+    } else {
+      console.log('Cannot place model:', {
+        modelExists: !!modelRef.current,
+        markerVisible: markerRef.current?.visible
+      });
+    }
+  }
+
+  // XR frame handler (hit test + auto placement)
+  const onXRFrame = (time: number, frame: XRFrame) => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    if (hitTestSourceRef.current && markerRef.current && hitTestReferenceSpaceRef.current) {
+      const hitTestResults = frame.getHitTestResults(hitTestSourceRef.current);
+      if (hitTestResults.length > 0) {
+        // Prefer hit closest to anchor hint in NDC if available
+        let hit = hitTestResults[0];
+        if (anchorHintNDC && renderer.xr.isPresenting) {
+          const xrCam = renderer.xr.getCamera();
+          let bestIdx = 0;
+          let bestDist = Number.POSITIVE_INFINITY;
+          for (let i = 0; i < hitTestResults.length; i++) {
+            const pose = hitTestResults[i].getPose(hitTestReferenceSpaceRef.current!);
+            if (!pose) continue;
+            const m = new THREE.Matrix4().fromArray(pose.transform.matrix);
+            const pos = new THREE.Vector3().setFromMatrixPosition(m);
+            const ndc = pos.clone().project(xrCam);
+            const dx = ndc.x - anchorHintNDC.x;
+            const dy = ndc.y - anchorHintNDC.y;
+            const dist = dx * dx + dy * dy;
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestIdx = i;
+            }
+          }
+          hit = hitTestResults[bestIdx];
+        }
+        const pose = hit.getPose(hitTestReferenceSpaceRef.current);
+        if (pose) {
+          markerRef.current.visible = true;
+          const m = new THREE.Matrix4().fromArray(pose.transform.matrix);
+          const p = new THREE.Vector3();
+          const q = new THREE.Quaternion();
+          const s = new THREE.Vector3();
+          m.decompose(p, q, s);
+          // Smooth position and rotation to reduce jitter
+          const alpha = 0.35;
+          if (!prevMarkerPosRef.current) prevMarkerPosRef.current = p.clone();
+          if (!prevMarkerQuatRef.current) prevMarkerQuatRef.current = q.clone();
+          markerRef.current.position.lerpVectors(prevMarkerPosRef.current, p, alpha);
+          markerRef.current.quaternion.slerpQuaternions(prevMarkerQuatRef.current, q, alpha);
+          prevMarkerPosRef.current.copy(markerRef.current.position);
+          prevMarkerQuatRef.current.copy(markerRef.current.quaternion);
+          markerRef.current.updateMatrixWorld();
+          pulseAnimation();
+
+          // Auto-place after marker is visible for a short time
+          if (!hasPlacedRef.current && modelRef.current) {
+            if (placeOnDetection) {
+              modelRef.current.position.copy(markerRef.current.position);
+              modelRef.current.quaternion.copy(markerRef.current.quaternion);
+              modelRef.current.visible = true;
+              hasPlacedRef.current = true;
+              setHasPlaced(true);
+            } else {
+              if (autoPlaceStartRef.current == null) {
+                autoPlaceStartRef.current = time;
+              } else if (time - autoPlaceStartRef.current > 1200) {
+                modelRef.current.position.copy(markerRef.current.position);
+                modelRef.current.quaternion.copy(markerRef.current.quaternion);
+                modelRef.current.visible = true;
+                hasPlacedRef.current = true;
+                setHasPlaced(true);
+              }
+            }
+          }
+        }
+      } else {
+        markerRef.current.visible = false;
+        autoPlaceStartRef.current = null;
+      }
+    }
+  };
+
   const startARSession = async () => {
     if (!navigator.xr) {
       setErrorMessage('WebXR not available.');
       return;
     }
-  
-    try {
-      const session = await navigator.xr.requestSession('immersive-ar', {
-        requiredFeatures: ['hit-test'],
-        optionalFeatures: ['dom-overlay', 'local-floor', 'bounded-floor'],
-        domOverlay: { root: document.body },
-      });
-  
-      if (rendererRef.current) {
-        rendererRef.current.xr.setSession(session);
+
+    try {
+      const session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay', 'local-floor', 'bounded-floor'],
+        domOverlay: { root: document.body },
+      });
+
+      // Lazily create renderer only when AR actually starts
+      if (!rendererRef.current) {
+        const container = containerRef.current!;
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        const renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: true,
+          powerPreference: 'high-performance',
+        });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.shadowMap.enabled = false;
+        renderer.xr.enabled = true;
+        container.appendChild(renderer.domElement);
+        rendererRef.current = renderer;
+
+        // Attach controller for tap-to-place
+        const controller = renderer.xr.getController(0);
+        controller.addEventListener('select', onSelect);
+        sceneRef.current!.add(controller);
+        controllerRef.current = controller;
+
+        // Wire session lifecycle listeners
+        renderer.xr.addEventListener('sessionstart', () => {
+          console.log('AR session started');
+          setIsARSessionActive(true);
+          onSessionChange?.(true);
+          hitTestSourceRequestedRef.current = false;
+          hasPlacedRef.current = false;
+          setHasPlaced(false);
+          autoPlaceStartRef.current = null;
+          if (modelRef.current) {
+            modelRef.current.visible = false;
+            modelRef.current.position.set(0, 0, -0.5);
+          }
+          if (markerRef.current) {
+            markerRef.current.visible = false;
+          }
+        });
+
+        renderer.xr.addEventListener('sessionend', () => {
+          console.log('AR session ended');
+          setIsARSessionActive(false);
+          onSessionChange?.(false);
+          hasPlacedRef.current = false;
+          setHasPlaced(false);
+          if (modelRef.current) {
+            modelRef.current.visible = true;
+            modelRef.current.position.set(0, 0, 0);
+            modelRef.current.rotation.set(0, 0, 0);
+            cameraRef.current!.position.set(0, 0, 1);
+            cameraRef.current!.lookAt(modelRef.current.position);
+          }
+          if (markerRef.current) {
+            markerRef.current.visible = false;
+          }
+        });
+
+        // Animation loop using global onXRFrame
+        renderer.setAnimationLoop((time: number, frame: XRFrame) => {
+          if (frame) onXRFrame(time, frame);
+          renderer.render(sceneRef.current!, cameraRef.current!);
+        });
       }
+
+      rendererRef.current.xr.setSession(session);
   
       // Try different reference spaces
       const referenceSpaceTypes = ['local-floor', 'bounded-floor', 'local', 'viewer'];

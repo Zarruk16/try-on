@@ -4,7 +4,7 @@ import { getBase64 } from './base64Sources';
 
 export type ShoeKind = 'left' | 'right' | 'single';
 
-// Public paths to GLB models
+// Paths kept for reference, but we primarily parse from base64 code now
 const MODEL_PATHS: Record<ShoeKind, string> = {
   left: '/model/left-foot-sneaker.glb',
   right: '/model/right-foot-sneaker.glb',
