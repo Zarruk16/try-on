@@ -348,6 +348,29 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           const footDir = toe ?? knee ?? anchor;
           lastShoePosRef.current = { x: placeX, y: placeY };
 
+          // Foot size calibration: infer foot length in pixels and scale shoe accordingly
+          let footLengthPx = 0;
+          if (toe) {
+            footLengthPx = Math.hypot(toe.x - anchor.x, toe.y - anchor.y);
+          } else if (knee) {
+            // Approximate foot length as a fraction of lower leg length
+            const lowerLeg = Math.hypot(knee.x - anchor.x, knee.y - anchor.y);
+            footLengthPx = lowerLeg * 0.42; // empirically reasonable fraction
+          } else {
+            // Fallback to a canvas-relative heuristic
+            footLengthPx = Math.min(canvasW, canvasH) * 0.12;
+          }
+          // Clamp to avoid wild spikes from noisy detections
+          footLengthPx = Math.max(40, Math.min(footLengthPx, Math.min(canvasW, canvasH) * 0.35));
+          if (longestSizeRef.current) {
+            const desiredScale = footLengthPx / longestSizeRef.current;
+            // Smooth scaling to avoid jitter
+            const prev = unitScaleRef.current || desiredScale;
+            const smooth = prev * 0.85 + desiredScale * 0.15;
+            unitScaleRef.current = smooth;
+            model.scale.setScalar(smooth);
+          }
+
           // Debug anchor/direction overlay (toggle with debugDrawAnchor)
           if (debugDrawAnchor) {
             ctx.save();
@@ -364,6 +387,8 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           // Convert canvas pixel Y (downwards) to Three world Y (upwards)
           const worldY = canvasH - placeY;
           model.position.set(placeX, worldY, 0);
+          // Ensure transform is applied if any child disables auto-updates
+          model.updateMatrixWorld(true);
           model.visible = true;
           // Keep scale stable; we already set a unit scale at load/resize
           // Avoid per-frame rescaling which can push model off-screen on some devices
@@ -377,6 +402,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
             lastShoeRotRef.current = blended;
             // Only rotate around Z; preserve base X/Y tilt set at load
             model.rotation.z = blended;
+            model.updateMatrixWorld(true);
           }
 
           // Shadow follows the shoe
