@@ -1,5 +1,29 @@
 import type { FootDetectorEngine, PoseResult, EstimateOptions } from './types';
 
+// Debug status holder to help diagnose initialization/detection issues
+const DEBUG_ENABLED = typeof process !== 'undefined'
+  ? (String(process.env.NEXT_PUBLIC_WEBAR_DEBUG || '').toLowerCase() === 'true' || process.env.NEXT_PUBLIC_WEBAR_DEBUG === '1')
+  : false;
+const debugStatus: {
+  scriptLoaded: boolean;
+  sdkReady: boolean;
+  initErrorCode?: string | false;
+  lastUpdateError?: any;
+  lastLandmarksCount: number;
+  lastLabels: string[];
+  lastDetectSummary?: { isDetected?: boolean; fps?: number; nHands?: number };
+  scanSettings?: Record<string, any>;
+} = {
+  scriptLoaded: false,
+  sdkReady: false,
+  lastLandmarksCount: 0,
+  lastLabels: [],
+};
+
+export function getWebARRocksDebugStatus() {
+  return { ...debugStatus };
+}
+
 // WebAR.rocks Hand SDK minimal types used by our adapter
 interface WebARRocksHandInitSpec {
   canvasId?: string;
@@ -7,6 +31,12 @@ interface WebARRocksHandInitSpec {
   callbackReady?: (errCode: string | false, spec?: any) => void;
   callbackTrack?: (detectState: any) => void;
   videoSettings?: { videoElement?: HTMLVideoElement };
+  // Advanced configuration (SDK will ignore unknown fields)
+  scanSettings?: Record<string, any>;
+  stabilizationSettings?: Record<string, any>;
+  landmarksStabilizerSpec?: Record<string, any>;
+  maxHandsDetected?: number;
+  landmarksLabels?: string[];
 }
 
 interface WebARRocksHandAPI {
@@ -15,6 +45,8 @@ interface WebARRocksHandAPI {
   get_LM(): number[] | null; // flattened [x0,y0,x1,y1,...] viewport coords [-1,1]
   get_LMLabels?(): string[];
   update_videoElement(vid: HTMLVideoElement, callback?: () => void): void;
+  set_scanSettings?(settings: Record<string, any>): void;
+  set_stabilizationSettings?(settings: Record<string, any>): void;
   toggle_pause?(isPause: boolean): void;
   destroy(): Promise<void> | void;
 }
@@ -25,7 +57,7 @@ declare global {
   }
 }
 
-async function ensureWebARRocksScript(scriptSrc = '/webarrocks/foot/webarrocks-foot.js'): Promise<WebARRocksHandAPI | null> {
+async function ensureWebARRocksScript(scriptSrc = '/models/web-ar-rocks/WebARRocksHand.js'): Promise<WebARRocksHandAPI | null> {
   if (window.WEBARROCKSHAND) return window.WEBARROCKSHAND;
   try {
     await new Promise<void>((resolve, reject) => {
@@ -38,6 +70,10 @@ async function ensureWebARRocksScript(scriptSrc = '/webarrocks/foot/webarrocks-f
       s.onerror = () => reject(new Error('Failed to load WebAR.rocks Hand SDK script'));
       document.head.appendChild(s);
     });
+    debugStatus.scriptLoaded = true;
+    if (DEBUG_ENABLED) {
+      console.info('[WebAR.rocks] SDK script loaded:', scriptSrc);
+    }
   } catch (e) {
     console.warn('[WebAR.rocks] script load failed', e);
     return null;
@@ -64,7 +100,7 @@ export async function createWebARRocksEngine(): Promise<FootDetectorEngine | nul
   canvas.style.top = '0';
   document.body.appendChild(canvas);
 
-  const defaultNNPath = '/webarrocks/foot/NN_FOOT_23.json';
+  const defaultNNPath = '/models/neuralNets/NN_FOOT_23.json';
   let lastDetectState: any = null;
   let lastLandmarks: number[] | null = null;
   let initialized = false;
@@ -82,25 +118,67 @@ export async function createWebARRocksEngine(): Promise<FootDetectorEngine | nul
           if (!initialized) {
             await new Promise<void>((resolve) => {
               try {
+                const maxHands = Math.max(1, Number(process.env.NEXT_PUBLIC_WEBAR_MAX_HANDS || 2));
+                const threshold = Number(process.env.NEXT_PUBLIC_WEBAR_THRESHOLD || 0.85);
+                const thresholdSignal = Number(process.env.NEXT_PUBLIC_WEBAR_THRESHOLD_SIGNAL || 0.2);
+                const nDetectsPerLoop = Number(process.env.NEXT_PUBLIC_WEBAR_DETECTS_PER_LOOP || 2);
+                const labelsEnv = (process.env.NEXT_PUBLIC_WEBAR_LANDMARKS_LABELS || '').trim();
+                const overrideLabels = labelsEnv ? labelsEnv.split(',').map(s => s.trim()).filter(Boolean) : undefined;
+                debugStatus.scanSettings = { threshold, thresholdSignal, nDetectsPerLoop, maxHandsDetected: maxHands };
+                if (DEBUG_ENABLED) {
+                  console.info('[WebAR.ocks] init params', debugStatus.scanSettings);
+                }
                 api!.init({
                   canvasId: canvas.id,
                   NNsPaths: [defaultNNPath],
                   videoSettings: { videoElement: vid },
+                  maxHandsDetected: maxHands,
+                  scanSettings: { threshold, thresholdSignal, nDetectsPerLoop },
+                  stabilizationSettings: { translationSmoothing: 0.85, rotationSmoothing: 0.85 },
+                  landmarksStabilizerSpec: { translationSmoothing: 0.85, rotationSmoothing: 0.85 },
+                  landmarksLabels: overrideLabels,
                   callbackReady: (errCode) => {
                     if (errCode) {
                       console.warn('[WebAR.rocks] init error:', errCode);
+                      debugStatus.initErrorCode = errCode;
                     } else {
                       initialized = true;
+                      debugStatus.sdkReady = true;
+                      // Apply advanced scan/stabilization settings for better accuracy
+                      try {
+                        const nDetects = Math.max(1, Number(process.env.NEXT_PUBLIC_WEBAR_DETECTS_PER_LOOP || nDetectsPerLoop || 2));
+                        api!.set_scanSettings?.({ nDetectsPerLoop: nDetects, threshold, thresholdSignal });
+                      } catch (e) {
+                        console.warn('[WebAR.rocks] set_scanSettings failed', e);
+                        debugStatus.lastUpdateError = e;
+                      }
+                      try {
+                        // Basic stabilization smoothing; SDK will ignore unknown fields
+                        api!.set_stabilizationSettings?.({ translationSmoothing: 0.85, rotationSmoothing: 0.85 });
+                      } catch (e) {
+                        console.warn('[WebAR.ocks] set_stabilizationSettings failed', e);
+                        debugStatus.lastUpdateError = e;
+                      }
                     }
                     resolve();
                   },
                   callbackTrack: (detectState) => {
                     lastDetectState = detectState;
                     lastLandmarks = api!.get_LM?.() || null;
+                    // Try to summarize detect state if available (fields vary by SDK build)
+                    try {
+                      const summary = {
+                        isDetected: Boolean((detectState && (detectState.detected || detectState.isDetected)) ?? undefined),
+                        fps: Number((detectState && detectState.fps) ?? NaN),
+                        nHands: Number((detectState && (detectState.nHands || detectState.hands?.length)) ?? NaN),
+                      } as { isDetected?: boolean; fps?: number; nHands?: number };
+                      debugStatus.lastDetectSummary = summary;
+                    } catch {}
                   }
                 });
               } catch (e) {
                 console.warn('[WebAR.rocks] init failed', e);
+                debugStatus.lastUpdateError = e;
                 resolve();
               }
             });
@@ -118,7 +196,12 @@ export async function createWebARRocksEngine(): Promise<FootDetectorEngine | nul
         }
 
         // Trigger one detection pass
-        api!.update();
+        try {
+          api!.update();
+        } catch (e) {
+          debugStatus.lastUpdateError = e;
+          if (DEBUG_ENABLED) console.warn('[WebAR.rocks] update() threw', e);
+        }
 
         const lm = lastLandmarks;
         if (!lm || lm.length < 2) return null;
@@ -126,7 +209,8 @@ export async function createWebARRocksEngine(): Promise<FootDetectorEngine | nul
         const srcW = vid.videoWidth || canvas.width;
         const srcH = vid.videoHeight || canvas.height;
 
-        // Convert viewport coords [-1,1] to pixel coords
+        // Convert viewport coords [-1,1] to pixel coords and attach labels if available
+        const labels = api!.get_LMLabels?.() || null;
         const keypoints = [] as { x: number; y: number; score?: number; name?: string }[];
         for (let i = 0; i < lm.length; i += 2) {
           const vx = lm[i];
@@ -136,7 +220,18 @@ export async function createWebARRocksEngine(): Promise<FootDetectorEngine | nul
           if (options?.flipHorizontal) {
             xPx = srcW - xPx;
           }
-          keypoints.push({ x: xPx, y: yPx });
+          const kp: { x: number; y: number; score?: number; name?: string } = { x: xPx, y: yPx };
+          if (labels && labels[Math.floor(i / 2)]) {
+            kp.name = String(labels[Math.floor(i / 2)]).toLowerCase();
+          }
+          keypoints.push(kp);
+        }
+        debugStatus.lastLandmarksCount = lm.length / 2;
+        if (labels && labels.length) debugStatus.lastLabels = labels.slice(0, 8);
+        // Promote key logs to info so they appear in captured console output
+        console.info('[WebAR.ocks] lmCount', debugStatus.lastLandmarksCount, 'labels', debugStatus.lastLabels);
+        if (debugStatus.lastDetectSummary) {
+          console.info('[WebAR.ocks] summary', debugStatus.lastDetectSummary);
         }
 
         // Optional remap to original if provided
@@ -153,6 +248,7 @@ export async function createWebARRocksEngine(): Promise<FootDetectorEngine | nul
         return [{ keypoints: mapped }];
       } catch (e) {
         console.warn('[WebAR.rocks] estimate failed', e);
+        debugStatus.lastUpdateError = e;
         return null;
       }
     },

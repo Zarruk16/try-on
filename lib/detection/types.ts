@@ -27,9 +27,11 @@ export interface FootDetectorEngine {
   /** Human-friendly name of the engine */
   name: string;
   /** Engine type identifier */
-  type: 'webarrocks';
+  type: 'webarrocks' | 'mediapipe';
   /** Run a single estimation on the provided source */
   estimate(source: HTMLVideoElement | HTMLCanvasElement, options?: EstimateOptions): Promise<PoseResult[] | null>;
+  /** Optional init hook for engines that require pre-initialization */
+  initialize?(): Promise<void> | void;
   /** Dispose underlying resources */
   dispose(): void | Promise<void>;
 }

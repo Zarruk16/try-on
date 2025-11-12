@@ -47,7 +47,7 @@ export default function ARPage() {
       {/* Pre-AR detection camera to provide ankle hint for initial placement */}
       {!isARActive && (
         <div className="absolute top-0 left-0 w-full h-full">
-          <FootTracker onDetect={setAnkles} fullScreen accuracy="heavy" />
+          <FootTracker onDetect={setAnkles} fullScreen accuracy="full" showHud={false} engineType="webarrocks" />
         </div>
       )}
       <ArScene modelUrl={modelUrl} onSessionChange={setIsARActive} placeOnDetection anchorHintNDC={hintNDC} />

@@ -26,12 +26,17 @@ function Shoe({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
+  const [occluder, setOccluder] = useState<THREE.Object3D | null>(null);
   const previousRootRef = useRef<THREE.Object3D | null>(null);
+  const previousOccluderRef = useRef<THREE.Object3D | null>(null);
   const longestRef = useRef<number>(1);
   const scaleRef = useRef<number>(1);
   const rotZRef = useRef<number>(0);
   const yawDeg = typeof process !== 'undefined' ? Number(process.env.NEXT_PUBLIC_SHOE_YAW_DEG || 0) : 0;
   const yawRad = (yawDeg * Math.PI) / 180;
+  const offsetX = typeof process !== 'undefined' ? Number(process.env.NEXT_PUBLIC_SHOE_OFFSET_X || 0) : 0;
+  const offsetY = typeof process !== 'undefined' ? Number(process.env.NEXT_PUBLIC_SHOE_OFFSET_Y || 0) : 0;
+  const scaleMul = typeof process !== 'undefined' ? Number(process.env.NEXT_PUBLIC_SHOE_SCALE_MUL || 1) : 1;
 
   useEffect(() => {
     let mounted = true;
@@ -48,7 +53,7 @@ function Shoe({
       longestRef.current = longest;
       // Base pixel-relative scale
       const basePx = Math.min(canvasW, canvasH) * 0.12;
-      const unitScale = basePx / longest;
+      const unitScale = (basePx / longest) * (isFinite(scaleMul) ? scaleMul : 1);
       scaleRef.current = unitScale;
       if (!mounted) return;
       // Dispose previous cloned model if any
@@ -71,6 +76,53 @@ function Shoe({
         // Base tilt so shoe lies on screen plane and faces camera
         groupRef.current.rotation.set(Math.PI / 2, 0, 0);
       }
+
+      // Load occluder GLB and configure depth-only material
+      try {
+        const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+        const loader = new GLTFLoader();
+        await new Promise<void>((resolve, reject) => {
+          loader.load('/3D%20Models/occluder.glb', (gltf: any) => {
+            const occRoot: THREE.Object3D = gltf.scene || gltf.scenes?.[0] || gltf;
+            // Center occluder similarly
+            const obox = new THREE.Box3().setFromObject(occRoot);
+            const ocenter = obox.getCenter(new THREE.Vector3());
+            occRoot.position.sub(ocenter);
+            // Replace materials with depth-only
+            occRoot.traverse((obj: any) => {
+              if (obj.isMesh) {
+                const mat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                (mat as any).colorWrite = false; // depth-only write
+                mat.depthWrite = true;
+                mat.side = THREE.DoubleSide;
+                obj.material = mat;
+                obj.renderOrder = -100000; // render first
+                obj.frustumCulled = false;
+              }
+            });
+            // Cleanup previous occluder
+            if (previousOccluderRef.current) {
+              previousOccluderRef.current.traverse((obj: any) => {
+                if (obj.isMesh) {
+                  obj.geometry?.dispose?.();
+                  if (Array.isArray(obj.material)) {
+                    obj.material.forEach((m: any) => m?.dispose?.());
+                  } else {
+                    // MeshBasicMaterial with colorWrite=false
+                    obj.material?.dispose?.();
+                  }
+                }
+              });
+            }
+            setOccluder(occRoot);
+            previousOccluderRef.current = occRoot;
+            resolve();
+          }, undefined, reject);
+        });
+      } catch (err) {
+        // Occluder is optional; log to console only
+        console.warn('[FootOverlayR3F] Occluder load failed', err);
+      }
     })();
     return () => {
       mounted = false;
@@ -78,6 +130,19 @@ function Shoe({
       const current = previousRootRef.current;
       if (current) {
         current.traverse((obj: any) => {
+          if (obj.isMesh) {
+            obj.geometry?.dispose?.();
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach((m: any) => m?.dispose?.());
+            } else {
+              obj.material?.dispose?.();
+            }
+          }
+        });
+      }
+      const occ = previousOccluderRef.current;
+      if (occ) {
+        occ.traverse((obj: any) => {
           if (obj.isMesh) {
             obj.geometry?.dispose?.();
             if (Array.isArray(obj.material)) {
@@ -115,8 +180,8 @@ function Shoe({
     scaleRef.current = smoothScale;
     g.scale.setScalar(smoothScale);
 
-    const placeX = anchor.x;
-    const placeY = anchor.y;
+    const placeX = anchor.x + offsetX;
+    const placeY = anchor.y + offsetY;
     const worldY = canvasH - placeY;
     g.position.set(placeX, worldY, 0);
     g.visible = true;
@@ -133,7 +198,17 @@ function Shoe({
 
   return (
     <group ref={groupRef} visible={false}>
+      {occluder && <primitive object={occluder} />}
       {root && <primitive object={root} />}
+      {/* Optional depth occluder to improve realism */}
+      {/* Fallback soft occluder if GLB fails to load */}
+      {!occluder && (
+        <mesh position={[0, 0, -0.01]} rotation={[Math.PI / 2, 0, 0]} renderOrder={-100000}>
+          <circleGeometry args={[20, 32]} />
+          {/* depth-only by disabling color write */}
+          <meshBasicMaterial color={0x000000} transparent opacity={0.0} depthWrite={true} />
+        </mesh>
+      )}
       {/* Simple shadow blob */}
       <mesh position={[0, 0, -0.5]} rotation={[Math.PI / 2, 0, 0]}>
         <circleGeometry args={[18, 32]} />

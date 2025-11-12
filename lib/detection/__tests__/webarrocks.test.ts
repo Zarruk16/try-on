@@ -77,8 +77,9 @@ describe('Detection manager', () => {
   });
 
   it('uses WebAR.rocks as the sole engine', async () => {
-    const { engine, usingWebARRocks } = await createFootDetectionManager({ preset: 'full', preferWebARRocks: true });
-    expect(usingWebARRocks).toBe(true);
-    expect(engine.type).toBe('webarrocks');
+    const mgr = await createFootDetectionManager({ preset: 'full', preferWebARRocks: true, engineType: 'enhanced-webarrocks' });
+    await mgr.initialize();
+    expect(mgr.getCurrentEngine().toLowerCase()).toContain('webar');
+    expect(mgr.engine!.type).toBe('webarrocks');
   });
 });

@@ -7,9 +7,9 @@ export type ShoeKind = 'left' | 'right' | 'single';
 
 // Default lightweight demo models from vendor project (stream-loaded via URL)
 const DEMO_MODEL_PATHS: Record<ShoeKind, string> = {
-  left: '/model/vansShoe.glb',
-  right: '/model/vansShoe.glb',
-  single: '/model/ballerinaShoe.glb',
+  left: '/3D%20Models/vansShoe.glb',
+  right: '/3D%20Models/vansShoe.glb',
+  single: '/3D%20Models/ballerinaShoe.glb',
 };
 
 const loader = new GLTFLoader();
@@ -41,9 +41,9 @@ export async function preload(kind: ShoeKind): Promise<void> {
       kind === 'right' ? process.env.NEXT_PUBLIC_MODEL_URL_RIGHT :
       process.env.NEXT_PUBLIC_MODEL_URL_SINGLE
     );
-    const url = (override && override.trim().length > 0)
-      ? override
-      : DEMO_MODEL_PATHS[kind];
+    const ov = override ? override.trim() : '';
+    const useOverride = ov.length > 0 && (ov.startsWith('http') || ov.includes('/3D Models/') || ov.includes('/3D%20Models/'));
+    const url = useOverride ? ov : DEMO_MODEL_PATHS[kind];
     const gltf: any = await new Promise((resolve, reject) => {
       loader.load(url, resolve, undefined, reject);
     });

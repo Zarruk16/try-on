@@ -7,7 +7,14 @@ export default function RightFootPage() {
   const [ankles, setAnkles] = useState<AnkleCoords>({ left: null, right: null });
   return (
     <main className="relative w-screen h-screen">
-      <FootTracker onDetect={setAnkles} fullScreen targetFoot="right" accuracy="heavy" showHud />
+      <FootTracker 
+        onDetect={setAnkles} 
+        fullScreen 
+        targetFoot="right" 
+        accuracy="full" 
+        showHud={false} 
+        engineType="webarrocks"
+      />
     </main>
   );
 }
