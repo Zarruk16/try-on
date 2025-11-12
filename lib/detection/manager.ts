@@ -1,11 +1,12 @@
 import type { FootDetectorEngine, AccuracyPreset } from './types';
 import { MobileOptimizer } from '../optimization/mobile-optimizer';
 import { createTfPosenetEngine } from './engines/tf-posenet';
+import { createWebARRocksEngine } from './engines/webarrocks';
 
 export interface CreateManagerOptions {
   preset: AccuracyPreset;
   preferWebARRocks?: boolean;
-  engineType?: 'tf' | 'auto';
+  engineType?: 'tf' | 'webarrocks' | 'auto';
   enableMobileOptimization?: boolean;
   enableModelSwitching?: boolean;
 }
@@ -61,7 +62,15 @@ export async function createFootDetectionManager(opts: CreateManagerOptions): Pr
 
   // Select the appropriate engine based on options and device capabilities
   const selectEngine = async (): Promise<FootDetectorEngine> => {
-    return createTfPosenetEngine();
+    if (preferWebARRocks || engineType === 'webarrocks') {
+      return createWebARRocksEngine();
+    }
+    if (engineType === 'tf') {
+      return createTfPosenetEngine();
+    }
+    // auto: prefer WebAR.rocks on mobile due to performance
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    return isMobile ? createWebARRocksEngine() : createTfPosenetEngine();
   };
 
   let currentEngine: FootDetectorEngine | null = null;

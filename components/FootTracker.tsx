@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createFootDetectionManager } from '../lib/detection/manager';
 import type { FootDetectorEngine, PoseResult } from '../lib/detection/types';
 import type { FootDetectionManager } from '../lib/detection/manager';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export interface AnkleCoords {
   left: { x: number; y: number } | null;
@@ -17,13 +19,25 @@ interface FootTrackerProps {
   accuracy?: 'lite' | 'full' | 'heavy';
   showHud?: boolean;
   shoeKind?: 'left' | 'right' | 'single';
-  engineType?: 'tf';
+  engineType?: 'tf' | 'webarrocks' | 'auto';
   targetFPS?: number;
 }
 
-export default function FootTracker({ onDetect, fullScreen = false, targetFoot = 'any', accuracy = 'full', showHud = false, shoeKind, engineType = 'tf', targetFPS = 30 }: FootTrackerProps) {
+export default function FootTracker({ onDetect, fullScreen = false, targetFoot = 'any', accuracy = 'full', showHud = false, shoeKind, engineType = 'webarrocks', targetFPS = 30 }: FootTrackerProps) {
+  const deriveCameraError = (err: any): string => {
+    const name = (err && typeof err === 'object' && 'name' in err) ? String((err as any).name) : '';
+    const message = (err && typeof err === 'object' && 'message' in err) ? String((err as any).message) : String(err);
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return 'Camera API unavailable in this browser.';
+    if (!isSecureContext) return 'Insecure context. Use HTTPS (Cloudflare Tunnel) or localhost.';
+    if (name === 'NotAllowedError') return 'Permission denied. Allow camera access in browser settings.';
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'No suitable camera found or constraints not met.';
+    if (name === 'NotReadableError') return 'Camera is in use by another app.';
+    if (name === 'SecurityError') return 'Security error. Ensure HTTPS and site permissions.';
+    return message || 'Unable to access camera. Ensure permissions and HTTPS/localhost.';
+  };
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const webglCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [footDetected, setFootDetected] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -57,6 +71,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
   const mgrRef = useRef<FootDetectionManager | null>(null);
   const usingWebARRocksRef = useRef<boolean>(false);
   const debugEnabled = typeof process !== 'undefined' ? (String(process.env.NEXT_PUBLIC_WEBAR_DEBUG || '').toLowerCase() === 'true' || process.env.NEXT_PUBLIC_WEBAR_DEBUG === '1') : false;
+  const threeRef = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.OrthographicCamera; shoe: THREE.Object3D | null } | null>(null);
 
   useEffect(() => {
     const videoEl = videoRef.current!;
@@ -361,6 +376,38 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       const initW = fullScreen ? window.innerWidth : 320;
       const initH = fullScreen ? window.innerHeight : 240;
       setOverlaySize({ w: initW, h: initH });
+
+      try {
+        const webgl = webglCanvasRef.current!;
+        webgl.width = initW; webgl.height = initH;
+        const renderer = new THREE.WebGLRenderer({ canvas: webgl, alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(initW, initH);
+        const scene = new THREE.Scene();
+        const cam = new THREE.OrthographicCamera(0, initW, initH, 0, -1000, 1000);
+        cam.position.z = 10;
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+        dir.position.set(0, -1, 2);
+        scene.add(dir);
+        const loader = new GLTFLoader();
+        loader.load('/3D%20Models/ballerinaShoe.glb', (gltf) => {
+          const shoe = gltf.scene || gltf.scenes?.[0] || null;
+          threeRef.current = { renderer, scene, camera: cam, shoe };
+          if (shoe) {
+            shoe.scale.set(90, 90, 90);
+            shoe.rotation.set(0, 0, 0);
+            shoe.position.set(initW * 0.5, initH * 0.5, 0);
+            scene.add(shoe);
+          }
+          renderer.render(scene, cam);
+        }, undefined, (err) => {
+          console.warn('GLTF load error', err);
+          threeRef.current = { renderer, scene, camera: cam, shoe: null };
+        });
+      } catch {
+        threeRef.current = null;
+      }
     };
 
     const init = async () => {
@@ -380,7 +427,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         ctx.font = '16px sans-serif';
         const msg = 'Camera access denied or unavailable';
         ctx.fillText(msg, 16, 30);
-        setCameraError('Unable to access camera. Ensure permissions and HTTPS/localhost.');
+        setCameraError(deriveCameraError(e));
         setFootDetected(false);
         return;
       }
@@ -446,6 +493,25 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       };
   }, [onDetect, fullScreen, targetFoot, accuracy, retryToken, targetFPS]);
 
+  useEffect(() => {
+    const t = threeRef.current;
+    if (!t || !t.shoe) return;
+    const { anchor, toe } = overlayAnchors;
+    if (!anchor) return;
+    const sx = overlaySize.w, sy = overlaySize.h;
+    t.shoe.position.set(anchor.x, anchor.y, 0);
+    if (toe) {
+      const dx = toe.x - anchor.x;
+      const dy = toe.y - anchor.y;
+      const ang = Math.atan2(dy, dx);
+      t.shoe.rotation.set(0, 0, ang);
+    }
+    t.shoe.scale.x = (isMirrored ? -1 : 1) * Math.abs(t.shoe.scale.x);
+    t.renderer.setSize(sx, sy);
+    t.camera.left = 0; t.camera.right = sx; t.camera.top = sy; t.camera.bottom = 0; t.camera.updateProjectionMatrix();
+    t.renderer.render(t.scene, t.camera);
+  }, [overlayAnchors, overlaySize, isMirrored]);
+
   return (
     <>
     <div
@@ -453,11 +519,16 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
       className={fullScreen ? 'relative w-screen h-screen' : "absolute top-4 right-4 z-10 bg-black/40 text-white rounded overflow-hidden"}
       style={fullScreen ? { position: 'fixed', inset: 0, zIndex: 1 } : undefined}
     >
-      <video ref={videoRef} playsInline style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: isMirrored ? 'scaleX(-1)' : 'none', backgroundColor: 'transparent', zIndex: 0 }} />
+      <video ref={videoRef} playsInline muted autoPlay style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: isMirrored ? 'scaleX(-1)' : 'none', backgroundColor: 'transparent', zIndex: 0 }} />
       <canvas
         ref={canvasRef}
         className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "w-[320px] h-[240px]"}
         style={fullScreen ? { display: 'block', zIndex: 1 } : undefined}
+      />
+      <canvas
+        ref={webglCanvasRef}
+        className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "w-[320px] h-[240px]"}
+        style={fullScreen ? { display: 'block', zIndex: 2 } : undefined}
       />
       
       {cameraError && (
