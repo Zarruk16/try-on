@@ -1,12 +1,11 @@
 import type { FootDetectorEngine, AccuracyPreset } from './types';
-import { createWebARRocksEngine } from './webarrocks';
-import { createEnhancedWebARRocksEngine } from './engines/webarrocks-enhanced';
 import { MobileOptimizer } from '../optimization/mobile-optimizer';
+import { createTfPosenetEngine } from './engines/tf-posenet';
 
 export interface CreateManagerOptions {
   preset: AccuracyPreset;
   preferWebARRocks?: boolean;
-  engineType?: 'webarrocks' | 'mediapipe' | 'mediapipe-tasks' | 'enhanced-webarrocks' | 'auto';
+  engineType?: 'tf' | 'auto';
   enableMobileOptimization?: boolean;
   enableModelSwitching?: boolean;
 }
@@ -24,7 +23,7 @@ export interface FootDetectionManager {
 }
 
 export async function createFootDetectionManager(opts: CreateManagerOptions): Promise<FootDetectionManager> {
-  const { preset, preferWebARRocks = false, engineType = 'mediapipe', enableMobileOptimization = true, enableModelSwitching = true } = opts;
+  const { preset, preferWebARRocks = false, engineType = 'tf', enableMobileOptimization = true, enableModelSwitching = true } = opts;
   
   let engine: FootDetectorEngine | null = null;
   // Flags are deprecated; use getCurrentEngine() for identification
@@ -62,43 +61,7 @@ export async function createFootDetectionManager(opts: CreateManagerOptions): Pr
 
   // Select the appropriate engine based on options and device capabilities
   const selectEngine = async (): Promise<FootDetectorEngine> => {
-    if (engineType === 'enhanced-webarrocks') {
-      return createEnhancedWebARRocksEngine({
-        modelType: currentModelType,
-        enableMobileOptimization,
-        threshold: getThresholdForAccuracy(preset)
-      });
-    }
-    if (engineType === 'webarrocks') {
-      const e = await createWebARRocksEngine();
-      if (!e) throw new Error('WebAR.rocks engine unavailable');
-      return e;
-    }
-    // mediapipe-tasks routed through createMediaPipeEngine for now
-    // Auto mode: intelligent engine selection
-    try {
-      if (preferWebARRocks || engineType === 'auto') {
-        return createEnhancedWebARRocksEngine({
-          modelType: currentModelType,
-          enableMobileOptimization,
-          threshold: getThresholdForAccuracy(preset)
-        });
-      }
-    } catch (error) {
-      console.warn('Preferred engine failed, falling back to enhanced WebAR.rocks:', error);
-      return createEnhancedWebARRocksEngine({
-        modelType: currentModelType,
-        enableMobileOptimization,
-        threshold: getThresholdForAccuracy(preset)
-      });
-    }
-
-    // Fallback: always provide an enhanced WebAR.rocks engine
-    return createEnhancedWebARRocksEngine({
-      modelType: currentModelType,
-      enableMobileOptimization,
-      threshold: getThresholdForAccuracy(preset)
-    });
+    return createTfPosenetEngine();
   };
 
   let currentEngine: FootDetectorEngine | null = null;

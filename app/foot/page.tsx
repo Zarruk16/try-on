@@ -14,7 +14,7 @@ export default function FootPage() {
         fullScreen 
         accuracy="full" 
         showHud={false} 
-        engineType="webarrocks"
+        engineType="tf"
       />
       
     </main>

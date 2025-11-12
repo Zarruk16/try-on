@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
-import FootOverlayR3F from './FootOverlayR3F';
 import { createFootDetectionManager } from '../lib/detection/manager';
 import type { FootDetectorEngine, PoseResult } from '../lib/detection/types';
 import type { FootDetectionManager } from '../lib/detection/manager';
@@ -18,11 +17,11 @@ interface FootTrackerProps {
   accuracy?: 'lite' | 'full' | 'heavy';
   showHud?: boolean;
   shoeKind?: 'left' | 'right' | 'single';
-  engineType?: 'webarrocks' | 'mediapipe' | 'mediapipe-tasks';
+  engineType?: 'tf';
   targetFPS?: number;
 }
 
-export default function FootTracker({ onDetect, fullScreen = false, targetFoot = 'any', accuracy = 'full', showHud = false, shoeKind, engineType = 'webarrocks', targetFPS = 30 }: FootTrackerProps) {
+export default function FootTracker({ onDetect, fullScreen = false, targetFoot = 'any', accuracy = 'full', showHud = false, shoeKind, engineType = 'tf', targetFPS = 30 }: FootTrackerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -396,23 +395,11 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         mgrRef.current = mgr;
         engine = mgr.engine;
         engineRef.current = mgr.engine;
-        usingWebARRocksRef.current = mgr.getCurrentEngine().toLowerCase().includes('webar');
-        if (debugEnabled && usingWebARRocksRef.current) {
-          try {
-            const { getWebARRocksDebugStatus } = await import('../lib/detection/webarrocks');
-            const st = getWebARRocksDebugStatus();
-            console.debug('[FootTracker] WebAR status', st);
-            if (st.initErrorCode) setInitError(String(st.initErrorCode));
-          } catch {}
-        }
+        usingWebARRocksRef.current = false;
       } catch (e: any) {
         console.error('Detection manager init failed:', e);
         setInitError(String(e?.message || e));
-        if (engineType === 'mediapipe' || engineType === 'mediapipe-tasks') {
-          setCameraError('MediaPipe engine unavailable. Ensure camera access and try reloading.');
-        } else {
-          setCameraError('WebAR.rocks engine unavailable. Ensure SDK files under /public/webarrocks/foot are accessible, and try reloading.');
-        }
+        setCameraError('Detection engine unavailable. Ensure camera access and try reloading.');
         return;
       }
 
@@ -434,12 +421,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
           lastTick = nowTick;
         } catch (err) {
           console.warn('estimate error', err);
-          if (debugEnabled) {
-            try {
-              const { getWebARRocksDebugStatus } = await import('../lib/detection/webarrocks');
-              console.debug('[FootTracker] estimate error status', getWebARRocksDebugStatus());
-            } catch {}
-          }
+          
         }
         scheduleNext();
       };
@@ -477,66 +459,7 @@ export default function FootTracker({ onDetect, fullScreen = false, targetFoot =
         className={fullScreen ? "absolute top-0 left-0 w-screen h-screen pointer-events-none" : "w-[320px] h-[240px]"}
         style={fullScreen ? { display: 'block', zIndex: 1 } : undefined}
       />
-      {targetFoot === 'left' && (
-        <FootOverlayR3F
-          canvasW={overlaySize.w}
-          canvasH={overlaySize.h}
-          shoeKind={shoeKind ?? 'left'}
-          anchor={overlayAnchorsLeft.anchor}
-          toe={overlayAnchorsLeft.toe}
-          knee={overlayAnchorsLeft.knee}
-          mirrored={isMirrored}
-        />
-      )}
-      {targetFoot === 'right' && (
-        <FootOverlayR3F
-          canvasW={overlaySize.w}
-          canvasH={overlaySize.h}
-          shoeKind={shoeKind ?? 'right'}
-          anchor={overlayAnchorsRight.anchor}
-          toe={overlayAnchorsRight.toe}
-          knee={overlayAnchorsRight.knee}
-          mirrored={isMirrored}
-        />
-      )}
-      {targetFoot === 'any' && (
-        <>
-          {/* Render both overlays if both sides detected; otherwise single */}
-          {overlayAnchorsLeft.anchor && (
-            <FootOverlayR3F
-              canvasW={overlaySize.w}
-              canvasH={overlaySize.h}
-              shoeKind={'left'}
-              anchor={overlayAnchorsLeft.anchor}
-              toe={overlayAnchorsLeft.toe}
-              knee={overlayAnchorsLeft.knee}
-              mirrored={isMirrored}
-            />
-          )}
-          {overlayAnchorsRight.anchor && (
-            <FootOverlayR3F
-              canvasW={overlaySize.w}
-              canvasH={overlaySize.h}
-              shoeKind={'right'}
-              anchor={overlayAnchorsRight.anchor}
-              toe={overlayAnchorsRight.toe}
-              knee={overlayAnchorsRight.knee}
-              mirrored={isMirrored}
-            />
-          )}
-          {!overlayAnchorsLeft.anchor && !overlayAnchorsRight.anchor && (
-            <FootOverlayR3F
-              canvasW={overlaySize.w}
-              canvasH={overlaySize.h}
-              shoeKind={shoeKind ?? 'single'}
-              anchor={overlayAnchors.anchor}
-              toe={overlayAnchors.toe}
-              knee={overlayAnchors.knee}
-              mirrored={isMirrored}
-            />
-          )}
-        </>
-      )}
+      
       {cameraError && (
         <div className="fixed inset-x-0 bottom-6 mx-auto w-[92%] max-w-xl z-20 bg-white/95 text-black shadow rounded p-4 space-y-3">
           <div className="font-semibold">Camera access required</div>

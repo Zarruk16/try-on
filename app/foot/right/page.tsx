@@ -13,7 +13,7 @@ export default function RightFootPage() {
         targetFoot="right" 
         accuracy="full" 
         showHud={false} 
-        engineType="webarrocks"
+        engineType="tf"
       />
     </main>
   );
