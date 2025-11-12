@@ -1,5 +1,4 @@
-module.exports = {
-  // Tailwind CSS v4: use the official PostCSS plugin with object shape
+export default {
   plugins: {
     '@tailwindcss/postcss': {},
   },
