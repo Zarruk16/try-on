@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Roboto';
+  src: url(assets/fonts/Roboto-Regular.ttf)
+}
+
+html {
+  font-size: 1rem;
+  font-family: 'Roboto', sans-serif;
+  margin: 0;
+  overflow: auto;
+  background-color: #0a0a0a;
+  color: #0a0a0a;
+}
+
+body {
+  margin: 0;
+  width: 100%;
+}
+
+.previewRounded {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.appBg {
+  background-image: url(../assets/images/bg.png);
+  background-size: cover;
+  background-position: top center;
+  background-repeat: no-repeat;
+  background-color: #0a0a0a;
+}
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@media (min-width: 768px) {
+  .cardsGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .cardsGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+
+.demoMenusContent {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 800px;
+  border-left: 1px solid #ccc;
+  padding-left: 2em;
+}
+
+.demoMenusContent > h1 {
+  margin-top: 2em;
+  margin-bottom: 2em;
+}
+
+li {
+  margin-top: 1em;
+}
+
+a {
+  color: #ccc;
+  text-decoration: none;
+}
+
+a:hover {
+  color: white;
+}
+
+p {
+  font-size: 12pt;
+}
+
+.mirrorX {
+  transform: rotateY(180deg);
+}
+
+.BackButton {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  padding: 16px;
+  z-index: 10;
+  border: 1px solid white;
+  font-weight: bold;
+  background-color: rgba(0,0,0,0.5)
+}
+
+.FlipCamButton {
+  position: fixed;
+  bottom: 0;
+  width: 100vw;
+  background-color: rgba(0,0,0,0.5);
+  z-index: 12;
+  text-align: center;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.VTOButton {
+  cursor: pointer;
+  flex-grow: 1;
+  font-variant: small-caps;
+  font-size: 14pt;
+  text-align: center;
+  min-width: 110px;
+  box-sizing: border-box;
+  padding-top: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  height: 40px;
+  color: #eee;
+}
+
+.VTOButton:hover {
+  background: rgba(50, 50, 50, 0.5);
+  color: #fff;
+}
+
+.VTOButtons {
+  display: flex;
+  position: fixed;
+  z-index: 10;
+  width: 100vw;
+  bottom: 0;
+  left: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
