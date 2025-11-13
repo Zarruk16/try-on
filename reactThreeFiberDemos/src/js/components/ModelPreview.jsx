@@ -38,7 +38,7 @@ export default function ModelPreview({ url }){
       <Canvas
         shadows
         gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
-        camera={{ position: [0, 0, 2.6] }}
+        camera={{ position: [0, 0, 2] }}
         onCreated={(state) => { state.gl.setClearColor(0x000000, 0) }}
         style={{ background: 'transparent' }}
       >

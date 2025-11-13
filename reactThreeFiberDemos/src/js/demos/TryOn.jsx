@@ -6,6 +6,7 @@ import { useLocation, useParams } from 'react-router-dom'
 
 import BackButton from '../components/BackButton'
 import FlipCamButton from '../components/FlipCamButton'
+import { Alert } from 'antd'
 import { findModelById } from '../models/config'
 import GLTFModelEmpty from '../../assets/VTO/empty.glb'
 import GLTFOccluderFoot from '../../assets/bareFootVTO/occluder.glb'
@@ -166,9 +167,12 @@ export default function TryOn(){
       <BackButton />
       <FlipCamButton onClick={flip_camera} />
 
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded bg-black/60 text-white text-sm">
-        point towards your leg or wrist
-      </div>
+      <Alert
+        message="Point towards your leg or wrist"
+        type="info"
+        showIcon
+        style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 20 }}
+      />
     </div>
   )
 }

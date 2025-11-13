@@ -1,10 +1,11 @@
 import React from 'react'
+import { Button } from 'antd'
 
 const VTOButton = React.forwardRef((props, ref) => {
   return (
-    <div ref={ref} onClick={props.onClick} className='VTOButton'>
-       {props.children}
-    </div>
+    <Button ref={ref} onClick={props.onClick} type='primary' size='large'>
+      {props.children}
+    </Button>
   )
 })
 
