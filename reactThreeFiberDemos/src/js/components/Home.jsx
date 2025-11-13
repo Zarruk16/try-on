@@ -23,7 +23,6 @@ export default function Home(){
   // discover glb assets inside project
   const wristMods = import.meta.glob('../../assets/VTO/*.glb', { eager: true })
   const footMods = import.meta.glob('../../assets/bareFootVTO/*.glb', { eager: true })
-  const footExternalMods = import.meta.glob('../../../../demos/bareFootVTO/assets/*.glb', { eager: true })
 
   const wristItems = Object.entries(wristMods)
     .filter(([p]) => !/empty\.glb$/i.test(p) && !/ring/i.test(p))
@@ -33,11 +32,7 @@ export default function Home(){
     .filter(([p]) => !/occluder\.glb$/i.test(p))
     .map(([p, m]) => ({ id: p, name: p.split('/').pop(), mode: 'foot', url: m.default }))
 
-  const footExternalItems = Object.entries(footExternalMods)
-    .filter(([p]) => !/occluder\.glb$/i.test(p))
-    .map(([p, m]) => ({ id: p, name: p.split('/').pop(), mode: 'foot', url: m.default }))
-
-  const items = [...wristItems, ...footItems, ...footExternalItems]
+  const items = [...wristItems, ...footItems]
 
   return (
     <div className="min-h-screen appBg text-[#ffffff]">
