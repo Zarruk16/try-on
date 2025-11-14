@@ -130,14 +130,16 @@ export default function TryOn(){
         multiDetectionSearchSlotsRate: 0.5, multiDetectionMaxOverlap: 0.3, multiDetectionOverlapScaleXY: [0.5,1], multiDetectionEqualizeSearchSlotScale: true, multiDetectionForceSearchOnOtherSide: true, multiDetectionForceChirality: 1, disableIsRightHandNNEval: true, overlapFactors: [1.0,1.0,1.0], translationScalingFactors: [0.3,0.3,1.0], nScaleLevels: 2, scale0Factor: 0.5
       },
       handTrackerCanvas: canvasVideoRef.current, debugDisplayLandmarks: false, NNs: [NNFoot], maxHandsDetected: 2,
-      stabilizationSettings: { NNSwitchMask: { isRightHand: false, isFlipped: false } }
+      stabilizationSettings: { NNSwitchMask: { isRightHand: false, isFlipped: false } },
+      landmarksStabilizerSpec: { minCutOff: 0.001, beta: 1 }
     } : {
       objectPointsPositionFactors: [1.0, 1.3, 1.0],
       poseLandmarksLabels: [ 'wristBack','wristLeft','wristRight','wristPalm','wristPalmTop','wristBackTop','wristRightBottom','wristLeftBottom' ],
       poseFilter, enableFlipObject: true, cameraZoom: 1, threshold: 0.92,
       handTrackerCanvas: canvasVideoRef.current, debugDisplayLandmarks: false, NNs: [NNWrist], maxHandsDetected: 1,
       stabilizationSettings: { switchNNErrorThreshold: 0.5 },
-      scanSettings: { translationScalingFactors: [0.3,0.3,1] }
+      landmarksStabilizerSpec: { minCutOff: 0.001, beta: 0.8 },
+      scanSettings: { translationScalingFactors: [0.25,0.25,1] }
     }
     VTOThreeHelper.init(spec, Stabilizer).then(() => {
       window.addEventListener('resize', handle_resize)

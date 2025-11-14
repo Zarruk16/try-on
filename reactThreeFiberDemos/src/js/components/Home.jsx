@@ -88,7 +88,7 @@ export default function Home(){
               <Card
                 hoverable
                 styles={{ body: { padding: 12 } }}
-                cover={<div style={{ padding: 12 }}><ModelPreview url={it.url} /></div>}
+                cover={<div style={{ padding: 12 }}><ModelPreview url={it.url} mode={it.mode} /></div>}
                 actions={[
                   <Button type="primary" icon={<EyeOutlined />} onClick={() => navigate('/try/custom', { state: { url: it.url, mode: it.mode } })} key="try">Try On</Button>,
                   <Button icon={<ShoppingCartOutlined />} onClick={() => addItem({ id: it.id, name: it.displayName, price: it.mode==='foot'?7500:6500, mode: it.mode, url: it.url })} key="cart">Add to Cart</Button>
