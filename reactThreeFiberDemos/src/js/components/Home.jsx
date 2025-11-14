@@ -82,9 +82,9 @@ export default function Home(){
         </div>
 
         <Typography.Title level={3} style={{ marginBottom: 16 }}>Choose a model</Typography.Title>
-        <Row gutter={[16, 16]}>
+        <Row gutter={[16, 24]}>
           {items.map(it => (
-            <Col key={it.id} xs={12} md={8} xl={6}>
+            <Col key={it.id} xs={24} sm={12} md={8} xl={6}>
               <Card
                 hoverable
                 styles={{ body: { padding: 12 } }}

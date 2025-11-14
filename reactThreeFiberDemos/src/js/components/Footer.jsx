@@ -11,7 +11,7 @@ export default function Footer(){
               Experience the future of online shopping with our virtual try-on experience.
             </Typography.Paragraph>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={24} sm={12} md={6}>
             <Typography.Text style={{ color: '#fff', fontWeight: 600 }}>Explore</Typography.Text>
             <Space direction="vertical" size={8} style={{ display: 'flex', marginTop: 12 }}>
               <Typography.Link href="#" style={{ color: 'rgba(255,255,255,0.8)' }}>New Arrivals</Typography.Link>
@@ -20,7 +20,7 @@ export default function Footer(){
               <Typography.Link href="#" style={{ color: 'rgba(255,255,255,0.8)' }}>Size Guide</Typography.Link>
             </Space>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={24} sm={12} md={6}>
             <Typography.Text style={{ color: '#fff', fontWeight: 600 }}>Support</Typography.Text>
             <Space direction="vertical" size={8} style={{ display: 'flex', marginTop: 12 }}>
               <Typography.Link href="#" style={{ color: 'rgba(255,255,255,0.8)' }}>Help Center</Typography.Link>
