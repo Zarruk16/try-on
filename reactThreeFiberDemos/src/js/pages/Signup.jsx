@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Card, Form, Input, Button, Typography, Divider, Space } from 'antd'
 import { Link } from 'react-router-dom'
 
-export default function Login(){
+export default function Signup(){
   const [loading, setLoading] = useState(false)
   const onFinish = () => {}
   const onGoogle = () => {}
@@ -17,21 +17,27 @@ export default function Login(){
   return (
     <div style={{ minHeight: 'calc(80vh - 90px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       <Card
-        title={<Typography.Title level={2} style={{ margin: 0 }}>Login</Typography.Title>}
+        title={<Typography.Title level={2} style={{ margin: 0 }}>Create Account</Typography.Title>}
         variant="outlined"
         styles={{ body: { paddingTop: 24, paddingBottom: 24 } }}
-        style={{ width: 520, border: '2px solid rgba(124,58,237,0.45)', boxShadow: '0 12px 30px rgba(124,58,237,0.25)', borderRadius: 16 }}
+        style={{ width: 560, border: '2px solid rgba(124,58,237,0.45)', boxShadow: '0 12px 30px rgba(124,58,237,0.25)', borderRadius: 16 }}
       >
         <Form layout="vertical" onFinish={onFinish} disabled={loading}>
+          <Form.Item name="name" label="Full Name"> 
+            <Input size="large" placeholder="Your name" />
+          </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}> 
             <Input size="large" placeholder="you@example.com" />
           </Form.Item>
-          <Form.Item name="password" label="Password" rules={[{ required: true }]}> 
+          <Form.Item name="password" label="Password" rules={[{ required: true, min: 6 }]}> 
+            <Input.Password size="large" placeholder="••••••••" />
+          </Form.Item>
+          <Form.Item name="confirm" label="Confirm Password" dependencies={["password"]} rules={[{ required: true }]}> 
             <Input.Password size="large" placeholder="••••••••" />
           </Form.Item>
           <Space size={12} style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button htmlType="submit" type="primary" size="large">Login</Button>
-            <Link to="/signup"><Button type="default" size="large">Create Account</Button></Link>
+            <Button htmlType="submit" type="primary" size="large">Sign Up</Button>
+            <Link to="/login"><Button type="default" size="large">Login</Button></Link>
           </Space>
         </Form>
         <Divider>or</Divider>

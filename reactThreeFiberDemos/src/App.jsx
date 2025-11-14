@@ -9,6 +9,7 @@ import Footer from './js/components/Footer'
 import Product from './js/pages/Product'
 import Cart from './js/pages/Cart'
 import Login from './js/pages/Login'
+import Signup from './js/pages/Signup'
 
 export default function App(){
   return (
@@ -31,6 +32,7 @@ export default function App(){
             <Route path="/product/:id" element={<Product />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
             <Route path="/try/:modelId" element={<TryOn />} />
           </Routes>
           <Footer />
