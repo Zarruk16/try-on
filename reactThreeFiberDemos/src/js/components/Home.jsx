@@ -18,13 +18,28 @@ export default function Home(){
     return base.split(' ').filter(Boolean).map(s => s[0].toUpperCase() + s.slice(1).toLowerCase()).join(' ')
   }
 
+  const NAME_OVERRIDES = {
+    'wristPlaceHolder2.glb': 'Wrist Placeholder',
+    'ballerinaShoe.glb': 'Ballerina Shoe',
+    'converseShoe.glb': 'Converse Shoe',
+    'blackShoe.glb': 'Kala Shoe'
+  }
+
   const wristItems = Object.entries(wristMods)
     .filter(([p]) => !/empty\.glb$/i.test(p) && !/ring/i.test(p))
-    .map(([p, m]) => ({ id: p, displayName: toDisplayName(p.split('/').pop()), mode: 'wrist', url: m.default }))
+    .map(([p, m]) => {
+      const fname = p.split('/').pop()
+      const displayName = NAME_OVERRIDES[fname] || toDisplayName(fname)
+      return { id: p, displayName, mode: 'wrist', url: m.default }
+    })
 
   const footItems = Object.entries(footMods)
     .filter(([p]) => !/occluder\.glb$/i.test(p))
-    .map(([p, m]) => ({ id: p, displayName: toDisplayName(p.split('/').pop()), mode: 'foot', url: m.default }))
+    .map(([p, m]) => {
+      const fname = p.split('/').pop()
+      const displayName = NAME_OVERRIDES[fname] || toDisplayName(fname)
+      return { id: p, displayName, mode: 'foot', url: m.default }
+    })
 
   const items = [...wristItems, ...footItems]
 
@@ -43,9 +58,9 @@ export default function Home(){
                   <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => onModelClick(it)} key="try">Try on</Button>
                 ]}
               >
-                <Space direction="vertical" size={8}>
-                  <Typography.Text style={{ fontSize: 18, fontWeight: 700 }} ellipsis>{it.displayName}</Typography.Text>
-                  <Tag color={it.mode === 'wrist' ? 'purple' : 'cyan'} style={{ width: 'fit-content', fontSize: 14, padding: '4px 10px' }}>
+                <Space direction="vertical" size={10}>
+                  <Typography.Text style={{ fontSize: 22, fontWeight: 700 }} ellipsis>{it.displayName}</Typography.Text>
+                  <Tag color={it.mode === 'wrist' ? 'purple' : 'cyan'} style={{ width: 'fit-content', fontSize: 16, padding: '6px 12px' }}>
                     {it.mode[0].toUpperCase() + it.mode.slice(1)}
                   </Tag>
                 </Space>
