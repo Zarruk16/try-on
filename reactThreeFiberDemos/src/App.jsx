@@ -4,6 +4,11 @@ import './index.css'
 
 import Home from './js/components/Home'
 import TryOn from './js/demos/TryOn'
+import Navbar from './js/components/Navbar'
+import Footer from './js/components/Footer'
+import Product from './js/pages/Product'
+import Cart from './js/pages/Cart'
+import Login from './js/pages/Login'
 
 export default function App(){
   return (
@@ -19,10 +24,17 @@ export default function App(){
       }}
     >
       <Router>
-        <Routes>
-          <Route path="/try/:modelId" element={<TryOn />} />
-          <Route path="/" element={<Home />} />
-        </Routes>
+        <Navbar />
+        <div style={{ paddingTop: 72 }}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/product/:id" element={<Product />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/try/:modelId" element={<TryOn />} />
+          </Routes>
+          <Footer />
+        </div>
       </Router>
     </ConfigProvider>
   )

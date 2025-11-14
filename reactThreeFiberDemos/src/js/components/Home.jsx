@@ -1,10 +1,12 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Typography, Card, Row, Col, Button, Tag, Space } from 'antd'
-import { PlayCircleOutlined } from '@ant-design/icons'
+import { ShoppingCartOutlined, EyeOutlined } from '@ant-design/icons'
 import ModelPreview from './ModelPreview'
+import { useCart } from '../store/cart'
 
 export default function Home(){
   const navigate = useNavigate()
+  const { addItem } = useCart()
 
   const onModelClick = (entry) => { navigate('/try/custom', { state: { url: entry.url, mode: entry.mode } }) }
 
@@ -46,7 +48,40 @@ export default function Home(){
   return (
     <div className="min-h-screen appBg" style={{ color: '#ffffff' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }}>
-        <Typography.Title level={2} style={{ marginBottom: 24 }}>Choose a model</Typography.Title>
+        <div style={{ marginBottom: 32 }}>
+          <Typography.Title level={1} style={{ marginBottom: 8, fontWeight: 800 }}>Virtual Try-On</Typography.Title>
+          <Typography.Paragraph style={{ fontSize: 18, color: 'rgba(255,255,255,0.75)', marginBottom: 16 }}>
+            Try sneakers and accessories virtually with interactive 3D previews.
+          </Typography.Paragraph>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Link to="/cart">
+              <Typography.Link>
+                <div style={{
+                  display: 'inline-block',
+                  padding: '12px 20px',
+                  borderRadius: 12,
+                  background: 'linear-gradient(90deg, #7c3aed, #3b82f6)',
+                  color: '#fff',
+                  fontWeight: 600
+                }}>Shop Collection</div>
+              </Typography.Link>
+            </Link>
+            <Link to="/login">
+              <Typography.Link>
+                <div style={{
+                  display: 'inline-block',
+                  padding: '12px 20px',
+                  borderRadius: 12,
+                  border: '2px solid #7c3aed',
+                  color: '#a78bfa',
+                  fontWeight: 600
+                }}>Join Now</div>
+              </Typography.Link>
+            </Link>
+          </div>
+        </div>
+
+        <Typography.Title level={3} style={{ marginBottom: 16 }}>Choose a model</Typography.Title>
         <Row gutter={[16, 16]}>
           {items.map(it => (
             <Col key={it.id} xs={12} md={8} xl={6}>
@@ -55,11 +90,15 @@ export default function Home(){
                 styles={{ body: { padding: 12 } }}
                 cover={<div style={{ padding: 12 }}><ModelPreview url={it.url} /></div>}
                 actions={[
-                  <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => onModelClick(it)} key="try">Try on</Button>
+                  <Button type="primary" icon={<EyeOutlined />} onClick={() => navigate('/try/custom', { state: { url: it.url, mode: it.mode } })} key="try">Try On</Button>,
+                  <Button icon={<ShoppingCartOutlined />} onClick={() => addItem({ id: it.id, name: it.displayName, price: it.mode==='foot'?7500:6500, mode: it.mode, url: it.url })} key="cart">Add to Cart</Button>
                 ]}
               >
                 <Space direction="vertical" size={10}>
-                  <Typography.Text style={{ fontSize: 22, fontWeight: 700 }} ellipsis>{it.displayName}</Typography.Text>
+                  <div>
+                    <Typography.Text style={{ fontSize: 22, fontWeight: 700 }} ellipsis>{it.displayName}</Typography.Text>
+                    <div className="text-lg font-bold text-white mt-1">৳{(it.mode==='foot'?7500:6500).toLocaleString()}</div>
+                  </div>
                   <Tag color={it.mode === 'wrist' ? 'purple' : 'cyan'} style={{ width: 'fit-content', fontSize: 16, padding: '6px 12px' }}>
                     {it.mode[0].toUpperCase() + it.mode.slice(1)}
                   </Tag>
