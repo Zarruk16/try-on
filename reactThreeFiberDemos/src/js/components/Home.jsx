@@ -8,8 +8,6 @@ export default function Home(){
   const navigate = useNavigate()
   const { addItem } = useCart()
 
-  const onModelClick = (entry) => { navigate('/try/custom', { state: { url: entry.url, mode: entry.mode } }) }
-
   // discover glb assets inside project
   const wristMods = import.meta.glob('../../assets/VTO/*.glb', { eager: true })
   const footMods = import.meta.glob('../../assets/bareFootVTO/*.glb', { eager: true })
@@ -21,14 +19,13 @@ export default function Home(){
   }
 
   const NAME_OVERRIDES = {
-    'wristPlaceHolder2.glb': 'Wrist Placeholder',
     'ballerinaShoe.glb': 'Ballerina Shoe',
     'converseShoe.glb': 'Converse Shoe',
     'blackShoe.glb': 'Kala Shoe'
   }
 
   const wristItems = Object.entries(wristMods)
-    .filter(([p]) => !/empty\.glb$/i.test(p) && !/ring/i.test(p))
+    .filter(([p]) => !/empty\.glb$/i.test(p) && !/ring/i.test(p) && !/wristPlaceHolder2\.glb/i.test(p))
     .map(([p, m]) => {
       const fname = p.split('/').pop()
       const displayName = NAME_OVERRIDES[fname] || toDisplayName(fname)
@@ -99,9 +96,7 @@ export default function Home(){
                     <Typography.Text style={{ fontSize: 22, fontWeight: 700 }} ellipsis>{it.displayName}</Typography.Text>
                     <div className="text-lg font-bold text-white mt-1">৳{(it.mode==='foot'?7500:6500).toLocaleString()}</div>
                   </div>
-                  <Tag color={it.mode === 'wrist' ? 'purple' : 'cyan'} style={{ width: 'fit-content', fontSize: 16, padding: '6px 12px' }}>
-                    {it.mode[0].toUpperCase() + it.mode.slice(1)}
-                  </Tag>
+                  <Tag color={it.mode === 'wrist' ? 'cyan' : 'purple'}>{it.mode}</Tag>
                 </Space>
               </Card>
             </Col>
