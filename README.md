@@ -1,7 +1,5 @@
 # Chrono Stride AR
 
-Chrono Stride AR is a mobile‑first web application that overlays a 3D shoe on your foot in real time. It is built with Next.js App Router and Three.js, optimized for running locally and via a secure tunnel on phones.
-
 ## Features
 - Real‑time camera preview with overlay anchors
 - 3D shoe rendering with rotation alignment
@@ -12,39 +10,42 @@ Chrono Stride AR is a mobile‑first web application that overlays a 3D shoe on 
 ## Quick Start
 Prerequisites: Node.js 18+, npm
 
-1. Install dependencies:
+1. Navigate to the app:
+   - `cd reactThreeFiberDemos`
+
+2. Install dependencies:
    - `npm install`
 
-2. Development (local):
-   - `npm run dev` (desktop localhost)
-   - `npm run dev:network` (binds to `0.0.0.0` for LAN/mobile testing)
+3. Development:
+   - `npm run dev -- --host` (LAN/mobile testing)
 
-3. Production build:
+4. Build and preview:
    - `npm run build`
-   - `npx next start -H 0.0.0.0 -p 3001`
+   - `npm run preview`
 
-4. Run on your phone via Cloudflare Tunnel:
-   - `cloudflared tunnel --url http://127.0.0.1:3001`
-   - Open the provided HTTPS URL on your phone and navigate to `/foot`
+5. Lint:
+   - `npm run lint`
 
 ## Routes
-- `/foot` — main foot tracking
-- `/foot/left` — left foot only
-- `/foot/right` — right foot only
+- `/` — home with product cards and 3D previews
+- `/try/:modelId` — AR try‑on (launched from a card; passes `{ url, mode }` via navigation state)
+- `/product/:id` — product details
+- `/cart` — cart
+- `/login`, `/signup` — auth pages
 
 ## 3D Models
-- Place GLB models under `public/model/`.
-- Default path used in the app: `/model/ballerinaShoe.glb` (you can replace with your own).
+- Wrist models: `reactThreeFiberDemos/src/assets/VTO/*.glb`
+- Foot models: `reactThreeFiberDemos/src/assets/bareFootVTO/*.glb`
+- Previews auto‑scale models; AR uses occluders and pose transforms.
 
 ## Permissions
 - Camera requires HTTPS or `localhost`. If you see a black screen or permission dialog repeatedly, ensure you are using the tunnel URL or `localhost` and allow camera access in your browser.
 
 ## Deployment Notes
-- Next.js 15 with React 19 using the App Router.
-- All camera and WebGL operations run client‑side.
-- When deploying on Vercel:
-  - Ensure your 3D models exist in `public/model/` and paths match case‑sensitive filenames.
-  - Avoid server‑side usage of `window`/`document` in non‑client files.
+- Stack: React 18, Vite, React Three Fiber, Ant Design, Three.js, WebARRocksHand.
+- Dev server host: `vite --host` for LAN/mobile testing.
+- `reactThreeFiberDemos/vite.config.js` includes `assetsInclude` for `*.glb`/`*.hdr` and `allowedHosts` for tunnels.
+- Camera requires HTTPS or `localhost`; ensure permissions on mobile.
 
 ## Troubleshooting
 - 502 Bad Gateway from Cloudflared:
