@@ -41,5 +41,55 @@ User acceptance testing was conducted by the project developer, who acted as the
 *   As a user, I want to browse products and view them in 3D.
 *   As a user, I want to try on a product using AR to see how it looks on me.
 
-![Testing Pyramid](https://i.imgur.com/example.png)  
-*Figure 4.1: Testing Pyramid for Chrono Stride AR*
+<figure>
+  <svg viewBox="0 0 920 600" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Testing pyramid segmented in a single triangle">
+    <defs>
+      <style>
+        .title{font: 700 20px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .text{font: 700 16px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .pct{font: 700 14px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .cap{font: 400 14px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .legend{font: 600 14px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .stroke{stroke-width:2}
+      </style>
+      <linearGradient id="triGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#f59e0b" />
+        <stop offset="50%" stop-color="#3b82f6" />
+        <stop offset="100%" stop-color="#22c55e" />
+      </linearGradient>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.25" />
+      </filter>
+      <clipPath id="triClip">
+        <polygon points="460,90 740,500 180,500" />
+      </clipPath>
+    </defs>
+
+    <text class="title" x="20" y="36">Testing Pyramid</text>
+
+    <rect x="720" y="10" width="190" height="60" rx="10" ry="10" fill="#ffffff" stroke="#7c3aed" stroke-width="2" />
+    <circle cx="735" cy="32" r="6" fill="#f59e0b" />
+    <text class="legend" x="750" y="36">E2E / Acceptance</text>
+    <circle cx="835" cy="32" r="6" fill="#3b82f6" />
+    <text class="legend" x="850" y="36">Integration</text>
+    <circle cx="735" cy="58" r="6" fill="#22c55e" />
+    <text class="legend" x="750" y="62">Unit</text>
+
+    <polygon points="460,90 740,500 180,500" fill="url(#triGrad)" stroke="#0a0a0a" class="stroke" filter="url(#shadow)" />
+    <g clip-path="url(#triClip)">
+      <rect x="180" y="240" width="560" height="40" fill="rgba(255,255,255,0.35)" />
+      <rect x="180" y="360" width="560" height="60" fill="rgba(255,255,255,0.35)" />
+    </g>
+    <text class="text" x="410" y="200">E2E / Acceptance</text>
+    <text class="pct" x="430" y="180">~15%</text>
+    <text class="text" x="430" y="300">Integration</text>
+    <text class="pct" x="450" y="280">~35%</text>
+    <text class="text" x="450" y="410">Unit</text>
+    <text class="pct" x="470" y="390">~50%</text>
+
+    <text class="cap" x="40" y="520">Unit tests: fast, isolate components and utilities.</text>
+    <text class="cap" x="40" y="544">Integration tests: verify coordination and flows.</text>
+    <text class="cap" x="40" y="568">E2E / Acceptance: full user journeys on target browsers/devices.</text>
+  </svg>
+  <figcaption><em>Figure 4.1: Testing Pyramid for Chrono Stride AR</em></figcaption>
+</figure>
