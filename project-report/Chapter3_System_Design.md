@@ -21,7 +21,76 @@
 
 ## 3.2 Activity Diagram
 
-*(Image Placeholder: An activity diagram illustrating the user flow through the application. It would start with the user entering the site, browsing products, selecting a product for a 3D preview, and then proceeding to the AR try-on.)*
+<figure>
+  <svg viewBox="0 0 980 560" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Chrono Stride AR activity diagram">
+    <defs>
+      <style>
+        .box{fill:#ffffff;stroke:#7c3aed;stroke-width:2.5;rx:10;ry:10}
+        .decision{fill:#ffffff;stroke:#000000;stroke-width:2.5}
+        .text{font: 600 14px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .title{font: 700 18px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .arrow{stroke:#000000;stroke-width:2.5;fill:none;marker-end:url(#arrowHead)}
+      </style>
+      <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#000000" />
+      </marker>
+    </defs>
+
+    <text class="title" x="30" y="40">User Flow: Browse → Preview → AR Try‑On</text>
+
+    <circle cx="80" cy="90" r="14" fill="#22c55e" />
+    <text class="text" x="110" y="96">Start</text>
+
+    <rect class="box" x="30" y="120" width="260" height="50" />
+    <text class="text" x="40" y="150">Enter site / Home page</text>
+
+    <rect class="box" x="330" y="120" width="260" height="50" />
+    <text class="text" x="340" y="150">Browse product catalog</text>
+
+    <rect class="box" x="630" y="120" width="300" height="50" />
+    <text class="text" x="640" y="150">Select product → open 3D preview</text>
+
+    <rect class="box" x="630" y="200" width="300" height="50" />
+    <text class="text" x="640" y="230">Inspect model (rotate / zoom)</text>
+
+    <polygon class="decision" points="480,220 520,260 480,300 440,260" />
+    <text class="text" x="410" y="255">Try On?</text>
+
+    <rect class="box" x="330" y="320" width="260" height="50" />
+    <text class="text" x="340" y="350">Request camera permission</text>
+
+    <polygon class="decision" points="480,390 520,430 480,470 440,430" />
+    <text class="text" x="410" y="425">Granted?</text>
+
+    <rect class="box" x="630" y="320" width="300" height="50" />
+    <text class="text" x="640" y="350">Initialize AR session</text>
+
+    <rect class="box" x="630" y="390" width="300" height="50" />
+    <text class="text" x="640" y="420">Track hand/foot & overlay model</text>
+
+    <rect class="box" x="30" y="320" width="260" height="50" />
+    <text class="text" x="40" y="350">Stay in 3D preview</text>
+
+    <rect class="box" x="30" y="390" width="260" height="50" />
+    <text class="text" x="40" y="420">Show permission help</text>
+
+    <circle cx="80" cy="500" r="14" fill="#ef4444" />
+    <text class="text" x="110" y="506">End</text>
+
+    <path class="arrow" d="M 94 102 L 94 120" />
+    <path class="arrow" d="M 290 145 L 330 145" />
+    <path class="arrow" d="M 590 145 L 630 145" />
+    <path class="arrow" d="M 780 170 L 780 200" />
+    <path class="arrow" d="M 630 225 L 520 225" />
+    <path class="arrow" d="M 480 300 L 480 320" />
+    <path class="arrow" d="M 460 260 L 330 260 L 330 320" />
+    <path class="arrow" d="M 590 345 L 630 345" />
+    <path class="arrow" d="M 480 470 L 110 470" />
+    <path class="arrow" d="M 780 370 L 780 390" />
+    <path class="arrow" d="M 780 440 L 110 440 L 110 486" />
+  </svg>
+  <figcaption><em>Figure 3.2: Activity diagram for Chrono Stride AR</em></figcaption>
+</figure>
 
 ## 3.3 Sequence Diagram
 
@@ -39,14 +108,14 @@ The Chrono Stride AR application follows a **component-based architecture** buil
   <svg viewBox="0 0 900 560" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Chrono Stride AR software architecture diagram">
     <defs>
       <style>
-        .box{fill:#121212;stroke:#7c3aed;stroke-width:2.5;rx:12;ry:12}
-        .title{font: 700 18px 'Franklin Gothic Book', Arial, sans-serif; fill:#ffffff}
-        .text{font: 400 15px 'Franklin Gothic Book', Arial, sans-serif; fill:rgba(255,255,255,0.85)}
-        .layer{font: 700 20px 'Franklin Gothic Book', Arial, sans-serif; fill:#a78bfa}
-        .arrow{stroke:#3b82f6;stroke-width:2.5;fill:none;marker-end:url(#arrowHead)}
+        .box{fill:#ffffff;stroke:#7c3aed;stroke-width:2.5;rx:12;ry:12}
+        .title{font: 700 18px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .text{font: 400 15px 'Franklin Gothic Book', Arial, sans-serif; fill:rgba(0,0,0,0.85)}
+        .layer{font: 700 20px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .arrow{stroke:#000000;stroke-width:2.5;fill:none;marker-end:url(#arrowHead)}
       </style>
-      <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+      <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#000000" />
       </marker>
     </defs>
 
@@ -95,9 +164,9 @@ The Chrono Stride AR application follows a **component-based architecture** buil
     <!-- Arrows -->
     <path class="arrow" d="M225 170 L 225 230" />
     <path class="arrow" d="M655 170 L 655 230" />
-    <path class="arrow" d="M450 350 L 165 400" />
-    <path class="arrow" d="M450 350 L 455 400" />
-    <path class="arrow" d="M450 350 L 740 400" />
+    <path class="arrow" d="M450 350 L 450 390 L 165 390 L 165 400" />
+    <path class="arrow" d="M450 350 L 450 390 L 455 390 L 455 400" />
+    <path class="arrow" d="M450 350 L 450 390 L 740 390 L 740 400" />
   </svg>
   <figcaption><em>Figure 3.1: Software Architecture Diagram for Chrono Stride AR</em></figcaption>
 </figure>
@@ -108,13 +177,13 @@ The Chrono Stride AR application follows a **component-based architecture** buil
   <svg viewBox="0 0 980 640" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Chrono Stride AR class diagram">
     <defs>
       <style>
-        .box{fill:#121212;stroke:#7c3aed;stroke-width:2.5;rx:10;ry:10}
-        .title{font: 700 16px 'Franklin Gothic Book', Arial, sans-serif; fill:#ffffff}
-        .text{font: 400 14px 'Franklin Gothic Book', Arial, sans-serif; fill:rgba(255,255,255,0.85)}
-        .arrow{stroke:#3b82f6;stroke-width:2.5;fill:none;marker-end:url(#arrowHead)}
+        .box{fill:#ffffff;stroke:#7c3aed;stroke-width:2.5;rx:10;ry:10}
+        .title{font: 700 16px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .text{font: 400 14px 'Franklin Gothic Book', Arial, sans-serif; fill:rgba(0,0,0,0.85)}
+        .arrow{stroke:#000000;stroke-width:2.5;fill:none;marker-end:url(#arrowHead)}
       </style>
-      <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+      <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#000000" />
       </marker>
     </defs>
 
@@ -168,10 +237,10 @@ The Chrono Stride AR application follows a **component-based architecture** buil
     <text class="text" x="665" y="448">allowedHosts, dev server settings</text>
 
     <!-- Relationships -->
-    <path class="arrow" d="M170 150 L 170 180" /> <!-- App -> TryOn -->
-    <path class="arrow" d="M780 150 L 780 180" /> <!-- Home -> ModelPreview -->
-    <path class="arrow" d="M320 450 L 360 450" /> <!-- Cart -> models/config (indirect via TryOn) -->
-    <path class="arrow" d="M610 260 L 650 430" /> <!-- TryOn -> vite.config (assets policy) -->
+    <path class="arrow" d="M170 150 L 170 180" />
+    <path class="arrow" d="M780 150 L 780 180" />
+    <path class="arrow" d="M320 450 L 360 450" />
+    <path class="arrow" d="M610 260 L 610 430 L 650 430" />
   </svg>
   <figcaption><em>Figure 3.2: Class diagram of main React components and helpers</em></figcaption>
 </figure>
@@ -184,13 +253,13 @@ The following schema supports user accounts, a product catalog, carts, and order
   <svg viewBox="0 0 980 600" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Chrono Stride AR database schema">
     <defs>
       <style>
-        .box{fill:#121212;stroke:#7c3aed;stroke-width:2.5;rx:10;ry:10}
-        .title{font: 700 16px 'Franklin Gothic Book', Arial, sans-serif; fill:#ffffff}
-        .text{font: 400 14px 'Franklin Gothic Book', Arial, sans-serif; fill:rgba(255,255,255,0.85)}
-        .rel{stroke:#3b82f6;stroke-width:2.5;fill:none;marker-end:url(#arrowHead)}
+        .box{fill:#ffffff;stroke:#7c3aed;stroke-width:2.5;rx:10;ry:10}
+        .title{font: 700 16px 'Franklin Gothic Book', Arial, sans-serif; fill:#000000}
+        .text{font: 400 14px 'Franklin Gothic Book', Arial, sans-serif; fill:rgba(0,0,0,0.85)}
+        .rel{stroke:#000000;stroke-width:2.5;fill:none;marker-end:url(#arrowHead)}
       </style>
-      <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+      <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#000000" />
       </marker>
     </defs>
 
@@ -236,11 +305,11 @@ The following schema supports user accounts, a product catalog, carts, and order
     <text class="text" x="455" y="380">price</text>
 
     <!-- Relations -->
-    <path class="rel" d="M160 190 L 160 260" /> <!-- User -> Order -->
-    <path class="rel" d="M300 330 L 440 330" /> <!-- Order -> OrderItem -->
-    <path class="rel" d="M500 210 L 500 260" /> <!-- Product -> OrderItem -->
-    <path class="rel" d="M860 110 L 860 190 L 160 190" /> <!-- CartItem -> User -->
-    <path class="rel" d="M695 190 L 695 210 L 500 210" /> <!-- CartItem -> Product -->
+    <path class="rel" d="M160 190 L 160 260" />
+    <path class="rel" d="M300 330 L 440 330" />
+    <path class="rel" d="M500 210 L 500 260" />
+    <path class="rel" d="M860 110 L 860 190 L 160 190" />
+    <path class="rel" d="M695 190 L 695 210 L 500 210" />
   </svg>
   <figcaption><em>Figure 3.3: Proposed database schema for users, products, carts and orders</em></figcaption>
 </figure>

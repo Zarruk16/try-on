@@ -100,3 +100,160 @@ For the Chrono Stride AR project, an **Agile (Iterative)** development model was
 *   **Flexibility:** The project requirements, particularly those related to the user experience and AR stabilization, were expected to evolve. The iterative nature of Agile allowed for flexibility and adaptation to feedback.
 *   **Rapid Prototyping:** The project began as a proof-of-concept. An iterative approach enabled the rapid development of a minimum viable product (MVP) to demonstrate the core functionality.
 *   **Incremental Improvement:** Features such as the responsive UI and AR stabilization were improved incrementally over several iterations based on testing and user feedback.
+
+## 2.10 Use Case Design
+
+This section connects the core use cases to concrete design elements and code in the project, showing how navigation, state, and AR rendering are realized.
+
+### UC-001: User Registration — Design
+- Actor: Customer
+- Preconditions: User is unauthenticated; Signup route available
+- Main flow:
+  - User opens Signup and fills name, email, password, confirm password
+  - Form validates required fields, email format, and minimum length
+  - On submit, system would create account (stubbed in POC)
+- Alternate flows:
+  - Invalid email or short password → field‑level validation errors shown
+  - Existing account → error returned from backend (future work)
+- Postconditions: For POC, success feedback is implied; in production, redirect to Login
+- UI and validation:
+  - Field rules defined in `reactThreeFiberDemos/src/js/pages/Signup.jsx:25–37`
+  - Submit/redirect controls in `reactThreeFiberDemos/src/js/pages/Signup.jsx:38–41`
+
+Example
+```jsx
+// Signup validation rules (excerpt)
+<Form.Item name="email" rules={[{ required: true, type: 'email' }]}>
+  <Input size="large" placeholder="you@example.com" />
+</Form.Item>
+<Form.Item name="password" rules={[{ required: true, min: 6 }]}> 
+  <Input.Password size="large" placeholder="••••••••" />
+</Form.Item>
+```
+
+### UC-002: User Login — Design
+- Actor: Customer
+- Preconditions: Account exists; Login route available
+- Main flow:
+  - User opens Login and enters email and password
+  - Form validates required fields and email format
+  - On submit, system would authenticate and set session (stubbed in POC)
+- Alternate flows:
+  - Invalid credentials → error message (future backend)
+  - Third‑party auth via Google button (placeholder)
+- Postconditions: Authenticated user is redirected to Home or previous page
+- UI and validation:
+  - Field rules in `reactThreeFiberDemos/src/js/pages/Login.jsx:25–31`
+  - Navigation control to Signup in `reactThreeFiberDemos/src/js/pages/Login.jsx:32–35`
+
+Example
+```jsx
+// Login form (excerpt)
+<Form.Item name="email" rules={[{ required: true, type: 'email' }]}>
+  <Input size="large" placeholder="you@example.com" />
+</Form.Item>
+<Form.Item name="password" rules={[{ required: true }]}> 
+  <Input.Password size="large" placeholder="••••••••" />
+</Form.Item>
+```
+
+### UC-003: Browse Product Catalog — Design
+- Actor: Customer
+- Preconditions: App shell and routes loaded; assets discoverable
+- Main flow:
+  - Home discovers available `GLB` assets and prepares display items
+  - User sees cards with embedded 3D previews
+- Postconditions: User can initiate AR Try‑On or navigate to product details
+- Key design hooks:
+  - Asset discovery uses `import.meta.glob` to enumerate models in `reactThreeFiberDemos/src/js/components/Home.jsx:11–13`
+  - Route definitions are provided by the app shell in `reactThreeFiberDemos/src/App.jsx:25–40`
+
+- Inputs and outputs:
+  - Input: local asset files named under `assets/VTO` and `assets/bareFootVTO`
+  - Output: card list with `url`, `mode`, `name` used by `ModelPreview` and actions
+- UX considerations:
+  - Cards are hoverable with preview; calls to action include Try On and Shop
+- Performance:
+  - Eager import ensures URLs are resolved at build time; `assetsInclude` whitelisting in `reactThreeFiberDemos/vite.config.js:9–14`
+
+Example
+```jsx
+// Route setup (excerpt)
+<Route path="/" element={<Home />} />
+<Route path="/product/:id" element={<Product />} />
+```
+
+### UC-004: View 3D Product Preview — Design
+- Actor: Customer
+- Preconditions: Selected product or asset URL available
+- Main flow:
+  - A `ModelPreview` component renders an interactive preview in the card or product page
+- Alternate flow: If preview fails to load, a graceful fallback appears (default framework error boundary)
+- Postconditions: Customer can proceed to AR Try‑On or add to cart
+- Key design hooks:
+  - `Home` renders previews inside cards with `ModelPreview` in `reactThreeFiberDemos/src/js/components/Home.jsx:78–88`
+  - `Product` page renders a larger `ModelPreview` and binds actions in `reactThreeFiberDemos/src/js/pages/Product.jsx:16–31`
+
+- Interactions:
+  - Orbit/pan via React Three Fiber; preview aids decision before AR
+- Data mapping:
+  - `url` for GLTF asset; optional `mode` for wrist/foot preview differences
+
+Example
+```jsx
+// Product page try-on and add-to-cart
+const tryOn = (mode) => { navigate('/try/custom', { state: { url, mode } }) }
+const addToCart = () => { add({ id, name: id.replace(/\.glb$/i,''), price, qty: 1 }) }
+```
+
+### UC-005: AR Try‑On — Design
+- Actor: Customer
+- Preconditions: Camera permission granted; selected model and pose available
+- Main flow:
+  - Navigation passes selected asset `url` and `mode` to AR route `/try/:modelId`
+  - `TryOn` loads GLTF, applies occluders, and tracks hand/foot with WebAR.rocks
+- Alternate flows:
+  - Permission denied → the user remains in preview (guided by UI messages)
+  - Selfie/environment camera toggling via a control
+- Postconditions: AR session renders over the camera feed; user can exit back
+- Key design hooks:
+  - AR route and component binding in `reactThreeFiberDemos/src/App.jsx:25–40`
+  - Custom navigation state handling and model selection in `reactThreeFiberDemos/src/js/demos/TryOn.jsx:101–121`
+  - Camera flip and AR helper integration in `reactThreeFiberDemos/src/js/demos/TryOn.jsx:151–176`
+
+- Rendering pipeline:
+  - WebAR.rocks trackers feed landmarks → stabilizer → pose → Three.js overlay
+- Occlusion:
+  - Uses soft cylinder or GLB occluder for realistic depth at `reactThreeFiberDemos/src/js/demos/TryOn.jsx:37–74`
+- UX messaging:
+  - Inline `Alert` instructs user positioning at `reactThreeFiberDemos/src/js/demos/TryOn.jsx:165–178`
+
+Example
+```jsx
+// Navigate to AR with selected asset
+navigate('/try/custom', { state: { url, mode } })
+
+// In TryOn component (excerpt)
+const { modelId } = useParams()
+const location = useLocation()
+const selectedModel = (modelId === 'custom' && location.state)
+  ? { id: 'custom', type: location.state.mode, gltf: location.state.url }
+  : findModelById(modelId)
+```
+
+### Supporting: Cart State — Design
+- Actor: Customer
+- Usage: Persist selections and prices
+- Key design hooks:
+  - Cart store API in `reactThreeFiberDemos/src/js/store/cart.jsx:3–12`
+  - `Product` adds an item to cart in `reactThreeFiberDemos/src/js/pages/Product.jsx:21–27`
+
+- Persistence and totals:
+  - Items saved in `localStorage` and subtotal computed with `useMemo` in `reactThreeFiberDemos/src/js/store/cart.jsx:3–11`
+  - Removal handled by index in `reactThreeFiberDemos/src/js/pages/Cart.jsx:1–23`
+
+Example
+```jsx
+// Add to cart (excerpt)
+const addToCart = () => { add({ id, name, price, qty: 1 }) }
+```

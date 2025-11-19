@@ -6,7 +6,7 @@ import { useCart } from '../store/cart'
 
 export default function Home(){
   const navigate = useNavigate()
-  const { addItem } = useCart()
+  const { add } = useCart()
 
   // discover glb assets inside project
   const wristMods = import.meta.glob('../../assets/VTO/*.glb', { eager: true })
@@ -88,7 +88,7 @@ export default function Home(){
                 cover={<div style={{ padding: 12 }}><ModelPreview url={it.url} mode={it.mode} /></div>}
                 actions={[
                   <Button type="primary" icon={<EyeOutlined />} onClick={() => navigate('/try/custom', { state: { url: it.url, mode: it.mode } })} key="try">Try On</Button>,
-                  <Button icon={<ShoppingCartOutlined />} onClick={() => addItem({ id: it.id, name: it.displayName, price: it.mode==='foot'?7500:6500, mode: it.mode, url: it.url })} key="cart">Add to Cart</Button>
+                  <Button icon={<ShoppingCartOutlined />} onClick={() => add({ id: it.id, name: it.displayName, price: it.mode==='foot'?7500:6500, mode: it.mode, url: it.url, qty: 1 })} key="cart">Add to Cart</Button>
                 ]}
               >
                 <Space direction="vertical" size={10}>
