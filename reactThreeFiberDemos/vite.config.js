@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [react()],
   assetsInclude: ['**/*.glb', '**/*.hdr'],
   server: {
-    allowedHosts: ['discount-recreation-quest-structure.trycloudflare.com'],
+    allowedHosts: ['pennsylvania-dating-holdings-priority.trycloudflare.com'],
     fs: { allow: [appRoot] }
   }
 })

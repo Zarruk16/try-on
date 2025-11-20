@@ -10,6 +10,7 @@ import { Alert } from 'antd'
 import { findModelById } from '../models/config'
 import GLTFModelEmpty from '../../assets/VTO/empty.glb'
 import GLTFOccluderFoot from '../../assets/bareFootVTO/occluder.glb'
+import HandSVG from '../../../assets/images/file.svg'
 
 import NNWrist from '../contrib/WebARRocksHand/neuralNets/NN_WRIST_27.json'
 import NNFoot from '../contrib/WebARRocksHand/neuralNets/NN_BAREFOOT_3.json'
@@ -65,6 +66,9 @@ const VTOModelContainer = (props) => {
   if (props.pose.scale){ const s = props.pose.scale; modelScene.scale.set(s, s, s) }
   if (props.pose.translation){ modelScene.position.add(new Vector3().fromArray(props.pose.translation)) }
   if (props.pose.quaternion){ modelScene.quaternion.fromArray(props.pose.quaternion) }
+  // if (props.mode === 'wrist'){
+  //   modelScene.rotateY(Math.PI )
+  // }
 
   let occluderModel = null
   let softOccluderModel = null
@@ -137,7 +141,7 @@ export default function TryOn(){
     } : {
       objectPointsPositionFactors: [1.0, 1.3, 1.0],
       poseLandmarksLabels: [ 'wristBack','wristLeft','wristRight','wristPalm','wristPalmTop','wristBackTop','wristRightBottom','wristLeftBottom' ],
-      poseFilter, enableFlipObject: true, cameraZoom: 1, threshold: 0.92,
+      poseFilter, enableFlipObject: true, cameraZoom: 1, threshold: 0.90,
       handTrackerCanvas: canvasVideoRef.current, debugDisplayLandmarks: false, NNs: [NNWrist], maxHandsDetected: 1,
       stabilizationSettings: { switchNNErrorThreshold: 0.5 },
       landmarksStabilizerSpec: { minCutOff: 0.001, beta: 0.8 },
@@ -148,6 +152,7 @@ export default function TryOn(){
       setIsDetected(detected)
     }
     VTOThreeHelper.init(spec, Stabilizer).then(() => {
+      VTOThreeHelper.update_videoSettings({ facingMode: 'environment' }).catch(() => {})
       window.addEventListener('resize', handle_resize)
       window.addEventListener('orientationchange', handle_resize)
     })
@@ -164,16 +169,14 @@ export default function TryOn(){
     <div>
       {(selectedModel.type === 'wrist' && !isDetected) && (
         <div style={{ position: 'fixed', zIndex: 3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none', textAlign: 'center' }}>
-          <svg width="220" height="220" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.85 }}>
-            <path d="M60 160 C 40 140, 40 110, 60 100 L 80 90 L 95 95 L 95 60 C 95 50, 110 50, 110 60 L 110 98 L 125 100 L 125 55 C 125 45, 140 45, 140 55 L 140 105 L 155 110 L 155 70 C 155 60, 170 60, 170 70 L 170 120 C 170 150, 140 170, 110 175 C 95 178, 75 175, 60 160 Z" fill="#ffffff" stroke="#7c3aed" strokeWidth="2" />
-          </svg>
+          <img src={HandSVG} alt="Hand" width={240} style={{ opacity: 0.7 }} />
           <div style={{ marginTop: 12, fontWeight: 700, color: '#fff' }}>{instruction}</div>
         </div>
       )}
       <Canvas className={mirrorClass} style={{ position: 'fixed', zIndex: 2, ...sizing }} gl={{ preserveDrawingBuffer: true }}>
         <ThreeGrabber sizing={sizing} />
         <Suspense fallback={null}>
-          <VTOModelContainer GLTFModel={selectedModel.gltf} occluder={selectedModel.occluder} pose={pose} />
+          <VTOModelContainer GLTFModel={selectedModel.gltf} occluder={selectedModel.occluder} pose={pose} mode={selectedModel.type} />
         </Suspense>
         <hemisphereLight args={[0xffffff, 0x444444, 0.6]} />
         <directionalLight color={0xffffff} intensity={1.2} position={[0,120,120]} />
