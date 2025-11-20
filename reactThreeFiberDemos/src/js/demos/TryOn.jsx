@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber'
-import { ACESFilmicToneMapping, Mesh, MeshNormalMaterial, CylinderGeometry, Vector3, sRGBEncoding } from 'three'
+import { ACESFilmicToneMapping, Mesh, MeshNormalMaterial, CylinderGeometry, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { useLocation, useParams } from 'react-router-dom'
 
@@ -21,7 +21,6 @@ const ThreeGrabber = (props) => {
   const threeFiber = useThree()
   const threeRenderer = threeFiber.gl
   threeRenderer.toneMapping = ACESFilmicToneMapping
-  threeRenderer.outputEncoding = sRGBEncoding
   threeRenderer.toneMappingExposure = 1.3
   useFrame(VTOThreeHelper.update_threeCamera.bind(null, props.sizing, threeFiber.camera))
   return null
