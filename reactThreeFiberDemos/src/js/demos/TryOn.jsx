@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber'
-import { ACESFilmicToneMapping, Mesh, MeshNormalMaterial, CylinderGeometry, Vector3 } from 'three'
+import { ACESFilmicToneMapping, Mesh, MeshNormalMaterial, CylinderGeometry, Vector3, sRGBEncoding } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { useLocation, useParams } from 'react-router-dom'
 
@@ -21,6 +21,8 @@ const ThreeGrabber = (props) => {
   const threeFiber = useThree()
   const threeRenderer = threeFiber.gl
   threeRenderer.toneMapping = ACESFilmicToneMapping
+  threeRenderer.outputEncoding = sRGBEncoding
+  threeRenderer.toneMappingExposure = 1.3
   useFrame(VTOThreeHelper.update_threeCamera.bind(null, props.sizing, threeFiber.camera))
   return null
 }
@@ -108,6 +110,7 @@ export default function TryOn(){
 
   const [sizing, setSizing] = useState(compute_sizing())
   const [isSelfieCam, setIsSelfieCam] = useState(false)
+  const [isDetected, setIsDetected] = useState(false)
   const [isInitialized] = useState(true)
   const pose = toThreePose(selectedModel.pose)
 
@@ -141,6 +144,10 @@ export default function TryOn(){
       landmarksStabilizerSpec: { minCutOff: 0.001, beta: 0.8 },
       scanSettings: { translationScalingFactors: [0.25,0.25,1] }
     }
+    spec.callbackTrack = (ds) => {
+      const detected = Array.isArray(ds) ? ds.some(d => d && d.isDetected) : !!(ds && ds.isDetected)
+      setIsDetected(detected)
+    }
     VTOThreeHelper.init(spec, Stabilizer).then(() => {
       window.addEventListener('resize', handle_resize)
       window.addEventListener('orientationchange', handle_resize)
@@ -153,15 +160,26 @@ export default function TryOn(){
   }
 
   const mirrorClass = (isSelfieCam) ? 'mirrorX' : ''
+  const instruction = (selectedModel.type === 'wrist') ? 'Spread your fingers to get the 3D view' : 'Point towards your leg or wrist'
   return (
     <div>
+      {(selectedModel.type === 'wrist' && !isDetected) && (
+        <div style={{ position: 'fixed', zIndex: 3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none', textAlign: 'center' }}>
+          <svg width="220" height="220" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.85 }}>
+            <path d="M60 160 C 40 140, 40 110, 60 100 L 80 90 L 95 95 L 95 60 C 95 50, 110 50, 110 60 L 110 98 L 125 100 L 125 55 C 125 45, 140 45, 140 55 L 140 105 L 155 110 L 155 70 C 155 60, 170 60, 170 70 L 170 120 C 170 150, 140 170, 110 175 C 95 178, 75 175, 60 160 Z" fill="#ffffff" stroke="#7c3aed" strokeWidth="2" />
+          </svg>
+          <div style={{ marginTop: 12, fontWeight: 700, color: '#fff' }}>{instruction}</div>
+        </div>
+      )}
       <Canvas className={mirrorClass} style={{ position: 'fixed', zIndex: 2, ...sizing }} gl={{ preserveDrawingBuffer: true }}>
         <ThreeGrabber sizing={sizing} />
         <Suspense fallback={null}>
           <VTOModelContainer GLTFModel={selectedModel.gltf} occluder={selectedModel.occluder} pose={pose} />
         </Suspense>
-        <directionalLight color={0xffffff} intensity={0.5} position={[0,100,100]} />
-        <ambientLight color={0xffffff} intensity={0.1} />
+        <hemisphereLight args={[0xffffff, 0x444444, 0.6]} />
+        <directionalLight color={0xffffff} intensity={1.2} position={[0,120,120]} />
+        <directionalLight color={0xffe0b2} intensity={0.6} position={[60,40,80]} />
+        <ambientLight color={0xffffff} intensity={0.4} />
       </Canvas>
 
       <canvas className={mirrorClass} ref={canvasVideoRef} style={{ position: 'fixed', zIndex: 1, ...sizing }} width={sizing.width} height={sizing.height} />
@@ -170,7 +188,7 @@ export default function TryOn(){
       <FlipCamButton onClick={flip_camera} />
 
       <Alert
-        message="Point towards your leg or wrist"
+        message={instruction}
         type="info"
         showIcon
         style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 20 }}
