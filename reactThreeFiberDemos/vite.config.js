@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [react()],
   assetsInclude: ['**/*.glb', '**/*.hdr'],
   server: {
-    allowedHosts: ['pennsylvania-dating-holdings-priority.trycloudflare.com'],
+    allowedHosts: ['creative-mattress-artist-contributor.trycloudflare.com'],
     fs: { allow: [appRoot] }
   }
 })
