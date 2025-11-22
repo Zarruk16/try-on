@@ -42,8 +42,8 @@ export default function Home(){
       return { id: p, displayName, mode: 'foot', url: m.default }
     })
 
-  const items = [...wristItems, ...footItems]
-    .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }))
+  const byName = (a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' })
+  const items = [...wristItems].sort(byName).concat([...footItems].sort(byName))
 
   const PreloadGLBs = ({ urls }) => {
     urls.forEach((u) => { try { useLoader.preload(GLTFLoader, u) } catch(_){} })
