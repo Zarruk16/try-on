@@ -24,15 +24,8 @@ export default function Home(){
     'blackShoe.glb': 'Kala Shoe'
   }
 
-  const isProd = import.meta.env.PROD
-  const isCloudflare = typeof window !== 'undefined' && /cloudflare/i.test(window.location.hostname)
   const wristItems = Object.entries(wristMods)
     .filter(([p]) => !/empty\.glb$/i.test(p) && !/ring/i.test(p) && !/wristPlaceHolder2\.glb/i.test(p))
-    .filter(([p]) => {
-      const fname = p.split('/').pop()
-      if ((isProd || isCloudflare) && /SmartWatch\.glb$/i.test(fname)) return false
-      return true
-    })
     .map(([p, m]) => {
       const fname = p.split('/').pop()
       const displayName = NAME_OVERRIDES[fname] || toDisplayName(fname)
