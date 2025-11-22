@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, Suspense, useCallback } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber'
 import { ACESFilmicToneMapping, SRGBColorSpace, Mesh, MeshNormalMaterial, CylinderGeometry, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -129,10 +129,6 @@ export default function TryOn(){
   const pose = toThreePose(selectedModel.pose)
 
   const timerResizeRef = useRef(null)
-  const handle_resize = useCallback(() => {
-    if (timerResizeRef.current){ clearTimeout(timerResizeRef.current) }
-    timerResizeRef.current = setTimeout(() => { timerResizeRef.current = null; setSizing(compute_sizing()) }, 200)
-  }, [])
 
   useEffect(() => { VTOThreeHelper.resize() }, [sizing])
 
@@ -164,11 +160,19 @@ export default function TryOn(){
     }
     VTOThreeHelper.init(spec, Stabilizer).then(() => {
       VTOThreeHelper.update_videoSettings({ facingMode: 'environment' }).catch(() => {})
-      window.addEventListener('resize', handle_resize)
-      window.addEventListener('orientationchange', handle_resize)
+      const handleResize = () => {
+        if (timerResizeRef.current){ clearTimeout(timerResizeRef.current) }
+        timerResizeRef.current = setTimeout(() => { timerResizeRef.current = null; setSizing(compute_sizing()) }, 200)
+      }
+      window.addEventListener('resize', handleResize)
+      window.addEventListener('orientationchange', handleResize)
+      return () => {
+        window.removeEventListener('resize', handleResize)
+        window.removeEventListener('orientationchange', handleResize)
+      }
     })
-    return VTOThreeHelper.destroy
-  }, [isInitialized, selectedModel.type, handle_resize])
+    return () => { VTOThreeHelper.destroy() }
+  }, [isInitialized, selectedModel.type])
 
   const flip_camera = () => {
     VTOThreeHelper.update_videoSettings({ facingMode: (isSelfieCam) ? 'environment' : 'user' }).then(() => { setIsSelfieCam(!isSelfieCam) }).catch(() => {})
