@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [react()],
   assetsInclude: ['**/*.glb', '**/*.hdr'],
   server: {
-    allowedHosts: ['creative-mattress-artist-contributor.trycloudflare.com'],
+    allowedHosts: ['storm-anaheim-bodies-paragraphs.trycloudflare.com'],
     fs: { allow: [appRoot] }
   }
 })
