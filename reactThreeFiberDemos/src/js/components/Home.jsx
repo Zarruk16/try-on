@@ -1,4 +1,6 @@
 import { useNavigate, Link } from 'react-router-dom'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { useLoader } from '@react-three/fiber'
 import { Typography, Card, Row, Col, Button, Tag, Space } from 'antd'
 import { ShoppingCartOutlined, EyeOutlined } from '@ant-design/icons'
 import ModelPreview from './ModelPreview'
@@ -43,9 +45,15 @@ export default function Home(){
   const items = [...wristItems, ...footItems]
     .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }))
 
+  const PreloadGLBs = ({ urls }) => {
+    urls.forEach((u) => { try { useLoader.preload(GLTFLoader, u) } catch(_){} })
+    return null
+  }
+
   return (
     <div className="min-h-screen appBg" style={{ color: '#ffffff' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }}>
+        <PreloadGLBs urls={items.map(i => i.url)} />
         <div style={{ marginBottom: 32 }}>
           <Typography.Title level={1} style={{ marginBottom: 8, fontWeight: 800 }}>Virtual Try-On</Typography.Title>
           <Typography.Paragraph style={{ fontSize: 18, color: 'rgba(255,255,255,0.75)', marginBottom: 16 }}>

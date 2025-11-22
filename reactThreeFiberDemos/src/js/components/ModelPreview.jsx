@@ -1,9 +1,10 @@
-import { Suspense, useRef } from 'react'
+import { Suspense, useRef, useState, useEffect } from 'react'
+import { Skeleton } from 'antd'
 import * as THREE from 'three'
 import { Canvas, useLoader, useFrame } from '@react-three/fiber'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
-function Model({ url, autoRotate = true, mode }){
+function Model({ url, autoRotate = true, mode, onReady }){
   const gltf = useLoader(GLTFLoader, url)
   const obj = gltf.scene.children?.[0] ? gltf.scene.children[0].clone() : gltf.scene.clone()
   const box = new THREE.Box3().setFromObject(obj)
@@ -32,6 +33,7 @@ function Model({ url, autoRotate = true, mode }){
   })
   const ref = useRef()
   useFrame(() => { if (ref.current && autoRotate) { ref.current.rotation.y += 0.01 } })
+  useEffect(() => { if (onReady) onReady() }, [])
   return (
     <object3D ref={ref}>
       <primitive object={obj} />
@@ -40,6 +42,7 @@ function Model({ url, autoRotate = true, mode }){
 }
 
 export default function ModelPreview({ url, autoRotate = true, hero = false, mode }){
+  const [ready, setReady] = useState(false)
   return (
     <div
       className="previewRounded"
@@ -53,6 +56,11 @@ export default function ModelPreview({ url, autoRotate = true, hero = false, mod
         borderRadius: 12
       }}
     >
+      {!ready && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, pointerEvents: 'none' }}>
+          <Skeleton active paragraph={false} title style={{ width: '60%' }} />
+        </div>
+      )}
       <Canvas
         shadows
         gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
@@ -66,7 +74,7 @@ export default function ModelPreview({ url, autoRotate = true, hero = false, mod
         <pointLight intensity={0.5} position={[-2, 2, 2]} color="#8b5cf6" />
         <pointLight intensity={0.3} position={[2, -1, -2]} color="#3b82f6" />
         <Suspense fallback={null}>
-          <Model url={url} autoRotate={autoRotate} mode={mode} />
+          <Model url={url} autoRotate={autoRotate} mode={mode} onReady={() => setReady(true)} />
         </Suspense>
       </Canvas>
     </div>
