@@ -3,7 +3,7 @@ import { Card, Form, Input, Button, Typography, Divider, Space } from 'antd'
 import { Link } from 'react-router-dom'
 
 export default function Signup(){
-  const [loading, setLoading] = useState(false)
+  const [loading] = useState(false)
   const onFinish = () => {}
   const onGoogle = () => {}
   const GoogleIcon = () => (

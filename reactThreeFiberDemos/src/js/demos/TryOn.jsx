@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, Suspense } from 'react'
+import { useEffect, useRef, useState, Suspense, useCallback } from 'react'
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber'
-import { ACESFilmicToneMapping, Mesh, MeshNormalMaterial, CylinderGeometry, Vector3 } from 'three'
+import { ACESFilmicToneMapping, SRGBColorSpace, Mesh, MeshNormalMaterial, CylinderGeometry, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { useLocation, useParams } from 'react-router-dom'
 
@@ -23,6 +23,11 @@ const ThreeGrabber = (props) => {
   const threeRenderer = threeFiber.gl
   threeRenderer.toneMapping = ACESFilmicToneMapping
   threeRenderer.toneMappingExposure = 1.3
+  if ('outputColorSpace' in threeRenderer) {
+    threeRenderer.outputColorSpace = SRGBColorSpace
+  } else if ('outputEncoding' in threeRenderer) {
+    threeRenderer.outputEncoding = 3001
+  }
   useFrame(VTOThreeHelper.update_threeCamera.bind(null, props.sizing, threeFiber.camera))
   return null
 }
@@ -51,17 +56,23 @@ const create_softOccluder = (occluder) => {
 
 const VTOModelContainer = (props) => {
   const objRef = useRef()
+  const gltf = useLoader(GLTFLoader, props.GLTFModel)
   useEffect(() => {
     const threeObject3DParent = objRef.current
+    if (!threeObject3DParent || threeObject3DParent.children.length === 0) return
     const threeObject3D = threeObject3DParent.children[0]
     VTOThreeHelper.set_handRightFollower(threeObject3DParent, threeObject3D)
-  })
-
-  const gltf = useLoader(GLTFLoader, props.GLTFModel)
+  }, [gltf])
+  
   const occluderAsset = (props.occluder.type === 'MODEL') ? (props.occluder.model) : GLTFModelEmpty
   const gltfOccluder = useLoader(GLTFLoader, occluderAsset)
   const modelScene = gltf.scene.children?.[0] ? gltf.scene.children[0].clone() : gltf.scene.clone()
-  if (modelScene.material){ modelScene.material.metalness = 0 }
+  modelScene.traverse(n => {
+    if (n.isMesh && n.material && typeof n.material.metalness === 'number'){
+      n.material.metalness = 0
+      if (typeof n.material.roughness === 'number') n.material.roughness = 0.8
+    }
+  })
 
   if (props.pose.scale){ const s = props.pose.scale; modelScene.scale.set(s, s, s) }
   if (props.pose.translation){ modelScene.position.add(new Vector3().fromArray(props.pose.translation)) }
@@ -117,11 +128,11 @@ export default function TryOn(){
   const [isInitialized] = useState(true)
   const pose = toThreePose(selectedModel.pose)
 
-  let _timerResize = null
-  const handle_resize = () => {
-    if (_timerResize){ clearTimeout(_timerResize) }
-    _timerResize = setTimeout(() => { _timerResize = null; setSizing(compute_sizing()) }, 200)
-  }
+  const timerResizeRef = useRef(null)
+  const handle_resize = useCallback(() => {
+    if (timerResizeRef.current){ clearTimeout(timerResizeRef.current) }
+    timerResizeRef.current = setTimeout(() => { timerResizeRef.current = null; setSizing(compute_sizing()) }, 200)
+  }, [])
 
   useEffect(() => { VTOThreeHelper.resize() }, [sizing])
 
@@ -157,7 +168,7 @@ export default function TryOn(){
       window.addEventListener('orientationchange', handle_resize)
     })
     return VTOThreeHelper.destroy
-  }, [isInitialized, selectedModel.type])
+  }, [isInitialized, selectedModel.type, handle_resize])
 
   const flip_camera = () => {
     VTOThreeHelper.update_videoSettings({ facingMode: (isSelfieCam) ? 'environment' : 'user' }).then(() => { setIsSelfieCam(!isSelfieCam) }).catch(() => {})
@@ -173,7 +184,7 @@ export default function TryOn(){
           <div style={{ marginTop: 12, fontWeight: 700, color: '#fff' }}>{instruction}</div>
         </div>
       )}
-      <Canvas className={mirrorClass} style={{ position: 'fixed', zIndex: 2, ...sizing }} gl={{ preserveDrawingBuffer: true }}>
+      <Canvas className={mirrorClass} style={{ position: 'fixed', zIndex: 2, ...sizing }} dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <ThreeGrabber sizing={sizing} />
         <Suspense fallback={null}>
           <VTOModelContainer GLTFModel={selectedModel.gltf} occluder={selectedModel.occluder} pose={pose} mode={selectedModel.type} />

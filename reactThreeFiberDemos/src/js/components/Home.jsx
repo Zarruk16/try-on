@@ -5,6 +5,7 @@ import { Typography, Card, Row, Col, Button, Tag, Space } from 'antd'
 import { ShoppingCartOutlined, EyeOutlined } from '@ant-design/icons'
 import ModelPreview from './ModelPreview'
 import { useCart } from '../store/cart'
+import RingOccluder from '../../assets/VTO/ringOccluder2.glb'
 
 export default function Home(){
   const navigate = useNavigate()
@@ -43,10 +44,11 @@ export default function Home(){
     })
 
   const byName = (a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' })
-  const items = [...wristItems].sort(byName).concat([...footItems].sort(byName))
+  const hiddenFirst = { id: 'hidden_ring_occluder', displayName: 'Ring Occluder', mode: 'wrist', url: RingOccluder, hidden: true }
+  const items = [hiddenFirst, ...wristItems.sort(byName), ...footItems.sort(byName)]
 
   const PreloadGLBs = ({ urls }) => {
-    urls.forEach((u) => { try { useLoader.preload(GLTFLoader, u) } catch(_){} })
+    urls.forEach((u) => { try { useLoader.preload(GLTFLoader, u) } catch(e){ void e } })
     return null
   }
 
@@ -89,7 +91,7 @@ export default function Home(){
 
         <Typography.Title level={3} style={{ marginBottom: 16 }}>Choose a model</Typography.Title>
         <Row gutter={[16, 24]}>
-          {items.map(it => (
+          {items.filter(it => !it.hidden).map(it => (
             <Col key={it.id} xs={24} sm={12} md={8} xl={6}>
               <Card
                 hoverable

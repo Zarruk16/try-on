@@ -9,7 +9,9 @@ export default defineConfig({
   plugins: [react()],
   assetsInclude: ['**/*.glb', '**/*.hdr'],
   server: {
-    allowedHosts: ['storm-anaheim-bodies-paragraphs.trycloudflare.com'],
+    host: true,
+    hmr: { clientPort: 443, protocol: 'https' },
+    allowedHosts: true,
     fs: { allow: [appRoot] }
   }
 })

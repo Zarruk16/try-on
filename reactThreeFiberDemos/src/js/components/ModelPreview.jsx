@@ -1,4 +1,4 @@
-import { Suspense, useRef, useState, useEffect } from 'react'
+import React, { Suspense, useRef, useState, useEffect } from 'react'
 import { Skeleton } from 'antd'
 import * as THREE from 'three'
 import { Canvas, useLoader, useFrame } from '@react-three/fiber'
@@ -33,7 +33,7 @@ function Model({ url, autoRotate = true, mode, onReady }){
   })
   const ref = useRef()
   useFrame(() => { if (ref.current && autoRotate) { ref.current.rotation.y += 0.01 } })
-  useEffect(() => { if (onReady) onReady() }, [])
+  useEffect(() => { if (onReady) onReady() }, [onReady])
   return (
     <object3D ref={ref}>
       <primitive object={obj} />
@@ -43,6 +43,13 @@ function Model({ url, autoRotate = true, mode, onReady }){
 
 export default function ModelPreview({ url, autoRotate = true, hero = false, mode }){
   const [ready, setReady] = useState(false)
+  
+  const isWebGLSupported = (() => {
+    try {
+      const c = document.createElement('canvas')
+      return !!(c.getContext('webgl') || c.getContext('webgl2'))
+    } catch { return false }
+  })()
   return (
     <div
       className="previewRounded"
@@ -61,11 +68,13 @@ export default function ModelPreview({ url, autoRotate = true, hero = false, mod
           <Skeleton active paragraph={false} title style={{ width: '60%' }} />
         </div>
       )}
+      {isWebGLSupported ? (
       <Canvas
         shadows
-        gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
+        dpr={[1, 2]}
+        gl={{ alpha: true, antialias: true }}
         camera={{ position: hero ? [0, 0, 4] : [0, 0, 2.6] }}
-        onCreated={(state) => { state.gl.setClearColor(0x000000, 0) }}
+        onCreated={(state) => { state.gl.setClearColor(0x000000, 0); if ('outputColorSpace' in state.gl) { state.gl.outputColorSpace = THREE.SRGBColorSpace } else if ('outputEncoding' in state.gl) { state.gl.outputEncoding = 3001 } }}
         style={{ background: 'transparent' }}
       >
         <hemisphereLight intensity={hero ? 1.2 : 0.9} color={0xffffff} groundColor={0x444444} />
@@ -73,10 +82,27 @@ export default function ModelPreview({ url, autoRotate = true, hero = false, mod
         <directionalLight castShadow intensity={hero ? 1.8 : 1.2} position={[2.5, 3, 2.5]} />
         <pointLight intensity={0.5} position={[-2, 2, 2]} color="#8b5cf6" />
         <pointLight intensity={0.3} position={[2, -1, -2]} color="#3b82f6" />
-        <Suspense fallback={null}>
-          <Model url={url} autoRotate={autoRotate} mode={mode} onReady={() => setReady(true)} />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <Model url={url} autoRotate={autoRotate} mode={mode} onReady={() => setReady(true)} />
+          </Suspense>
+        </ErrorBoundary>
       </Canvas>
+      ) : (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ color: '#fff', opacity: 0.8 }}>WebGL not available</div>
+        </div>
+      )}
     </div>
   )
+}
+class ErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state = { hasError: false } }
+  static getDerivedStateFromError(){ return { hasError: true } }
+  componentDidCatch(){ }
+  render(){ return this.state.hasError ? (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ color: '#fff', opacity: 0.8 }}>Preview unavailable</div>
+    </div>
+  ) : this.props.children }
 }
