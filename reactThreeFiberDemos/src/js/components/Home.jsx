@@ -41,6 +41,7 @@ export default function Home(){
     })
 
   const items = [...wristItems, ...footItems]
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }))
 
   return (
     <div className="min-h-screen appBg" style={{ color: '#ffffff' }}>
