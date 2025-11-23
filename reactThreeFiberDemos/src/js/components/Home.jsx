@@ -45,8 +45,7 @@ export default function Home(){
     })
 
   const byName = (a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' })
-  const hiddenFirst = { id: 'hidden_ring_occluder', displayName: 'Ring Occluder', mode: 'wrist', url: RingOccluder, hidden: true }
-  const items = [hiddenFirst, ...wristItems.sort(byName), ...footItems.sort(byName)]
+  const items = [...wristItems.sort(byName), ...footItems.sort(byName)]
 
   const PreloadGLBs = ({ urls }) => {
     urls.forEach((u) => { try { useLoader.preload(GLTFLoader, u) } catch(e){ void e } })
@@ -101,7 +100,7 @@ export default function Home(){
 
         <Typography.Title level={3} style={{ marginBottom: 16 }}>Choose a model</Typography.Title>
         <Row gutter={[16, 24]}>
-          {items.filter(it => !it.hidden).map(it => (
+          {items.map(it => (
             <Col key={it.id} xs={24} sm={12} md={8} xl={6}>
               <Card
                 hoverable
