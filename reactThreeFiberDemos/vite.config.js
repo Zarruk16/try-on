@@ -10,7 +10,7 @@ export default defineConfig({
   assetsInclude: ['**/*.glb', '**/*.hdr'],
   server: {
     host: true,
-    hmr: { clientPort: 443, protocol: 'https' },
+    hmr: { protocol: 'ws' },
     allowedHosts: true,
     fs: { allow: [appRoot] }
   }
