@@ -3,13 +3,13 @@ import { ConfigProvider, theme } from 'antd'
 import './index.css'
 
 import Home from './js/components/Home'
-import TryOn from './js/demos/TryOn'
 import Navbar from './js/components/Navbar'
 import Footer from './js/components/Footer'
 import Product from './js/pages/Product'
 import Cart from './js/pages/Cart'
 import Login from './js/pages/Login'
 import Signup from './js/pages/Signup'
+import TryOn from './js/demos/TryOn'
 
 function Shell(){
   const location = useLocation()

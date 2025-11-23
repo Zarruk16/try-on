@@ -2,8 +2,6 @@ import { useEffect, useRef, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber'
 import { ACESFilmicToneMapping, SRGBColorSpace, Mesh, MeshNormalMaterial, CylinderGeometry, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { useLocation, useParams } from 'react-router-dom'
 
 import BackButton from '../components/BackButton'
@@ -58,13 +56,7 @@ const create_softOccluder = (occluder) => {
 
 const VTOModelContainer = (props) => {
   const objRef = useRef()
-  const gltf = useLoader(GLTFLoader, props.GLTFModel, (loader) => {
-    const draco = new DRACOLoader()
-    draco.setDecoderConfig({ type: 'js' })
-    draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
-    loader.setDRACOLoader(draco)
-    loader.setMeshoptDecoder(MeshoptDecoder)
-  })
+  const gltf = useLoader(GLTFLoader, props.GLTFModel)
   useEffect(() => {
     const threeObject3DParent = objRef.current
     if (!threeObject3DParent || threeObject3DParent.children.length === 0) return
@@ -73,13 +65,7 @@ const VTOModelContainer = (props) => {
   }, [gltf])
   
   const occluderAsset = (props.occluder.type === 'MODEL') ? (props.occluder.model) : GLTFModelEmpty
-  const gltfOccluder = useLoader(GLTFLoader, occluderAsset, (loader) => {
-    const draco = new DRACOLoader()
-    draco.setDecoderConfig({ type: 'js' })
-    draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
-    loader.setDRACOLoader(draco)
-    loader.setMeshoptDecoder(MeshoptDecoder)
-  })
+  const gltfOccluder = useLoader(GLTFLoader, occluderAsset)
   const modelScene = gltf.scene.children?.[0] ? gltf.scene.children[0].clone() : gltf.scene.clone()
   modelScene.traverse(n => {
     if (n.isMesh && n.material && typeof n.material.metalness === 'number'){
@@ -202,7 +188,7 @@ export default function TryOn(){
           <div style={{ marginTop: 12, fontWeight: 700, color: '#fff' }}>{instruction}</div>
         </div>
       )}
-      <Canvas className={mirrorClass} style={{ position: 'fixed', zIndex: 2, ...sizing }} dpr={[1, 1.5]} gl={{ preserveDrawingBuffer: true, antialias: false, powerPreference: 'high-performance' }}>
+      <Canvas className={mirrorClass} style={{ position: 'fixed', zIndex: 2, ...sizing }} dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <ThreeGrabber sizing={sizing} />
         <Suspense fallback={null}>
           <VTOModelContainer GLTFModel={selectedModel.gltf} occluder={selectedModel.occluder} pose={pose} mode={selectedModel.type} />

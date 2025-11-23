@@ -1,17 +1,16 @@
 import { defineConfig } from 'vite'
-import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 
-// https://vite.dev/config/
-const appRoot = fileURLToPath(new URL('.', import.meta.url))
-
 export default defineConfig({
+  base: './',
   plugins: [react()],
-  assetsInclude: ['**/*.glb', '**/*.hdr'],
+  assetsInclude: ['**/*.glb'],
   server: {
     host: true,
-    hmr: { protocol: 'ws' },
     allowedHosts: true,
-    fs: { allow: [appRoot] }
+    hmr: {
+      protocol: 'wss',
+      clientPort: 443
+    }
   }
 })

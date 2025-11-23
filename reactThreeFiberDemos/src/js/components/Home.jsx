@@ -1,4 +1,5 @@
 import { useNavigate, Link } from 'react-router-dom'
+import { useEffect } from 'react'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { useLoader } from '@react-three/fiber'
 import { Typography, Card, Row, Col, Button, Tag, Space } from 'antd'
@@ -51,6 +52,15 @@ export default function Home(){
     urls.forEach((u) => { try { useLoader.preload(GLTFLoader, u) } catch(e){ void e } })
     return null
   }
+
+  useEffect(() => {
+    const handler = (e) => {
+      const { url, error } = e.detail || {}
+      console.warn('GLTF preview error:', url, error)
+    }
+    window.addEventListener('gltf_parse_error', handler)
+    return () => { window.removeEventListener('gltf_parse_error', handler) }
+  }, [])
 
   return (
     <div className="min-h-screen appBg" style={{ color: '#ffffff' }}>
