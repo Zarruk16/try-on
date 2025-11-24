@@ -1,7 +1,49 @@
-import { Suspense, useRef } from 'react'
+import React, { Suspense, useRef } from 'react'
 import * as THREE from 'three'
 import { Canvas, useLoader, useFrame } from '@react-three/fiber'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { Html } from '@react-three/drei'
+
+// Fallback loader
+function Loader() {
+  return (
+    <Html center>
+      <div style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        color: 'white',
+        fontSize: '1.2rem'
+      }}>
+        Loading...
+      </div>
+    </Html>
+  )
+}
+
+// Error boundary
+class ErrorBoundary extends React.Component {
+  state = { hasError: false }
+  static getDerivedStateFromError = () => ({ hasError: true })
+  componentDidCatch = (error, info) => console.error(error, info)
+  render = () => this.state.hasError ? (
+    <Html center>
+      <div style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        color: 'white',
+        fontSize: '1.2rem'
+      }}>
+        Could not load model
+      </div>
+    </Html>
+  ) : this.props.children
+}
 
 function FitGLTF({ url, mode = 'foot', autoRotate = true }){
   const group = useRef()
@@ -41,6 +83,7 @@ function FitGLTF({ url, mode = 'foot', autoRotate = true }){
 }
 
 export default function ModelPreview({ url, autoRotate = true, hero = false, mode }){
+  useLoader.preload(GLTFLoader, url)
   const isMobile = (navigator.maxTouchPoints > 0 && window.innerWidth <= 768)
 
   return (
@@ -64,9 +107,11 @@ export default function ModelPreview({ url, autoRotate = true, hero = false, mod
       >
         <ambientLight intensity={0.8} />
         <directionalLight intensity={1.2} position={[2.5, 3, 2.5]} />
-        <Suspense fallback={null}>
-          <FitGLTF url={url} mode={mode} autoRotate={autoRotate} />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<Loader />}>
+            <FitGLTF url={url} mode={mode} autoRotate={autoRotate} />
+          </Suspense>
+        </ErrorBoundary>
       </Canvas>
     </div>
   )
