@@ -1,5 +1,5 @@
 import { useNavigate, Link } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { useLoader } from '@react-three/fiber'
 import { Typography, Card, Row, Col, Button, Tag, Space } from 'antd'
@@ -10,6 +10,8 @@ import { useCart } from '../store/cart'
 export default function Home(){
   const navigate = useNavigate()
   const { add } = useCart()
+  const productsRef = useRef(null)
+  
 
   // discover glb assets inside project
   const wristMods = import.meta.glob('../../assets/VTO/*.glb', { eager: true })
@@ -60,25 +62,40 @@ export default function Home(){
     return () => { window.removeEventListener('gltf_parse_error', handler) }
   }, [])
 
+  
+
   return (
     <div className="min-h-screen appBg" style={{ color: '#ffffff' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }}>
-        <PreloadGLBs urls={items.map(i => i.url)} />
-        <div style={{ marginBottom: 32 }}>
-          <Typography.Title level={1} style={{ marginBottom: 8, fontWeight: 800 }}>Virtual Try-On</Typography.Title>
-          <Typography.Paragraph style={{ fontSize: 18, color: 'rgba(255,255,255,0.75)', marginBottom: 16 }}>
-            Try sneakers and accessories virtually with interactive 3D previews.
-          </Typography.Paragraph>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Link to="/cart">
-              <Button type="primary" size="large">Shop Collection</Button>
-            </Link>
-            <Link to="/login">
-              <Button type="primary" size="large">Join Now</Button>
-            </Link>
+      <div style={{ position: 'relative', height: '100vh', width: '100%' }}>
+        <video
+          src={'/assets/video/1126.mp4'}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          disablePictureInPicture
+          controlsList="nodownload noplaybackrate noremoteplayback"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.35, transform: 'translateZ(0)', willChange: 'opacity' }}
+        />
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '100%', padding: '0 24px', textAlign: 'center' }}>
+            <Typography.Title level={1} style={{ margin: 0, fontWeight: 800, textAlign: 'center', fontSize: 48 }}>
+              Virtual Try-On of shoes and watch
+            </Typography.Title>
+            <Typography.Paragraph style={{ fontSize: 16, color: 'rgba(255,255,255,0.85)', textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
+              Try sneakers and accessories virtually with interactive 3D previews.
+            </Typography.Paragraph>
+          <div style={{ bottom: 24, left: 0, right: 0, display: 'flex', gap: 12, justifyContent: 'center', paddingTop: '24px' }}>
+            <Button type="primary" size="large" onClick={() => productsRef.current?.scrollIntoView({ behavior: 'smooth' })}>Shop Now</Button>
+            <Link to="/login"><Button type="primary" size="large">Join</Button></Link>
+          </div>
           </div>
         </div>
+      </div>
 
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }} ref={productsRef}>
+        <PreloadGLBs urls={items.map(i => i.url)} />
         <Typography.Title level={3} style={{ marginBottom: 16 }}>Choose a model</Typography.Title>
         <Row gutter={[16, 24]}>
           {items.map(it => (

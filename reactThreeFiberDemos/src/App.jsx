@@ -14,6 +14,7 @@ import TryOn from './js/demos/TryOn'
 function Shell(){
   const location = useLocation()
   const isAR = location.pathname.startsWith('/try')
+  const isHome = location.pathname === '/'
   return (
     <ConfigProvider
       theme={{
@@ -47,7 +48,7 @@ function Shell(){
       }}
     >
       {!isAR && <Navbar />}
-      <div style={{ paddingTop: isAR ? 0 : 72 }}>
+      <div style={{ paddingTop: isAR ? 0 : (isHome ? 0 : 72) }}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/product/:id" element={<Product />} />
