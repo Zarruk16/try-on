@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { Button } from 'antd'
 import ModelPreview from '../components/ModelPreview'
 import { useCart } from '../store/cart'
 
@@ -27,10 +28,10 @@ export default function Product(){
           <div className="text-2xl font-semibold mb-2">{id.replace(/\.glb$/i,'')}</div>
           <div className="text-xl mb-4">${price.toFixed(2)}</div>
           <div className="flex gap-3 mb-4">
-            <button onClick={()=>tryOn('foot')} className="px-4 py-2 rounded-xl bg-white text-zinc-900 hover:bg-zinc-100">Try on Foot</button>
-            <button onClick={()=>tryOn('wrist')} className="px-4 py-2 rounded-xl bg-white text-zinc-900 hover:bg-zinc-100">Try on Wrist</button>
+            <Button type="primary" onClick={()=>tryOn('foot')}>Try on Foot</Button>
+            <Button type="primary" onClick={()=>tryOn('wrist')}>Try on Wrist</Button>
           </div>
-          <button onClick={addToCart} className="px-4 py-2 rounded-xl bg-white text-zinc-900 hover:bg-zinc-100">Add to Cart</button>
+          <Button onClick={addToCart}>Add to Cart</Button>
         </div>
       </div>
     </div>

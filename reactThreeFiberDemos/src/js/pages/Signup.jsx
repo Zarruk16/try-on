@@ -15,12 +15,11 @@ export default function Signup(){
     </svg>
   )
   return (
-    <div style={{ minHeight: 'calc(80vh - 90px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+    <div style={{ minHeight: 'calc(110vh - 120px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
       <Card
         title={<Typography.Title level={2} style={{ margin: 0 }}>Create Account</Typography.Title>}
-        variant="outlined"
         styles={{ body: { paddingTop: 24, paddingBottom: 24 } }}
-        style={{ width: 560, border: '2px solid rgba(124,58,237,0.45)', boxShadow: '0 12px 30px rgba(124,58,237,0.25)', borderRadius: 16 }}
+        style={{ width: 560, boxShadow: '0 0 0 2px rgba(43,74,203,0.35), 0 24px 64px rgba(43,74,203,0.45), 0 0 120px rgba(43,74,203,0.30)' }}
       >
         <Form layout="vertical" onFinish={onFinish} disabled={loading}>
           <Form.Item name="name" label="Full Name"> 
@@ -37,11 +36,11 @@ export default function Signup(){
           </Form.Item>
           <Space size={12} style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Button htmlType="submit" type="primary" size="large">Sign Up</Button>
-            <Link to="/login"><Button type="default" size="large">Login</Button></Link>
+            <Link to="/login"><Button size="large">Login</Button></Link>
           </Space>
         </Form>
         <Divider>or</Divider>
-        <Button block onClick={onGoogle} size="large" style={{ background: '#fff', color: '#111', border: '1px solid #e5e7eb' }} icon={<GoogleIcon />}>Continue with Google</Button>
+        <Button block onClick={onGoogle} size="large" icon={<GoogleIcon />}>Continue with Google</Button>
       </Card>
     </div>
   )

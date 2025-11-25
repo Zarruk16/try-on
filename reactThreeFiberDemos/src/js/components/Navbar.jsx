@@ -18,8 +18,6 @@ export default function Navbar(){
     <div style={{ position: 'fixed', top: 0, width: '100%', zIndex: 1000 }}>
       <Layout.Header
         style={{
-          background: 'linear-gradient(90deg, #2e1065 0%, #0a0a0a 50%, #1e3a8a 100%)',
-          borderBottom: '1px solid rgba(124,58,237,0.35)',
           height: 64,
           display: 'flex',
           alignItems: 'center',

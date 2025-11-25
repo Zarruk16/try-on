@@ -19,10 +19,30 @@ function Shell(){
       theme={{
         algorithm: theme.darkAlgorithm,
         token: {
-          colorPrimary: '#7c3aed',
+          colorPrimary: '#2f54eb',
+          colorInfo: '#13c2c2',
+          colorSuccess: '#52c41a',
+          colorWarning: '#faad14',
+          colorError: '#f5222d',
           colorBgBase: '#0a0a0a',
           colorTextBase: '#ffffff',
           borderRadius: 12
+        },
+        components: {
+          Layout: {
+            headerBg: 'rgba(47,84,235,0.18)',
+            footerBg: 'rgba(47,84,235,0.12)'
+          },
+          Button: {
+            borderRadius: 12,
+            primaryShadow: '0 8px 24px rgba(47,84,235,0.35)'
+          },
+          Card: {
+            borderRadiusLG: 16
+          },
+          Tag: {
+            borderRadiusSM: 8
+          }
         }
       }}
     >

@@ -3,10 +3,9 @@ import { useEffect } from 'react'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { useLoader } from '@react-three/fiber'
 import { Typography, Card, Row, Col, Button, Tag, Space } from 'antd'
-import { ShoppingCartOutlined, EyeOutlined } from '@ant-design/icons'
+import { EyeOutlined } from '@ant-design/icons'
 import ModelPreview from './ModelPreview'
 import { useCart } from '../store/cart'
-import RingOccluder from '../../assets/VTO/ringOccluder2.glb'
 
 export default function Home(){
   const navigate = useNavigate()
@@ -72,28 +71,10 @@ export default function Home(){
           </Typography.Paragraph>
           <div style={{ display: 'flex', gap: 12 }}>
             <Link to="/cart">
-              <Typography.Link>
-                <div style={{
-                  display: 'inline-block',
-                  padding: '12px 20px',
-                  borderRadius: 12,
-                  background: 'linear-gradient(90deg, #7c3aed, #3b82f6)',
-                  color: '#fff',
-                  fontWeight: 600
-                }}>Shop Collection</div>
-              </Typography.Link>
+              <Button type="primary" size="large">Shop Collection</Button>
             </Link>
             <Link to="/login">
-              <Typography.Link>
-                <div style={{
-                  display: 'inline-block',
-                  padding: '12px 20px',
-                  borderRadius: 12,
-                  border: '2px solid #7c3aed',
-                  color: '#a78bfa',
-                  fontWeight: 600
-                }}>Join Now</div>
-              </Typography.Link>
+              <Button type="primary" size="large">Join Now</Button>
             </Link>
           </div>
         </div>
@@ -108,7 +89,7 @@ export default function Home(){
                 cover={<div style={{ padding: 12 }}><ModelPreview url={it.url} mode={it.mode} /></div>}
                 actions={[
                   <Button type="primary" icon={<EyeOutlined />} onClick={() => navigate('/try/custom', { state: { url: it.url, mode: it.mode } })} key="try">Try On</Button>,
-                  <Button icon={<ShoppingCartOutlined />} onClick={() => add({ id: it.id, name: it.displayName, price: it.mode==='foot'?7500:6500, mode: it.mode, url: it.url, qty: 1 })} key="cart">Add to Cart</Button>
+                  <Button onClick={() => add({ id: it.id, name: it.displayName, price: it.mode==='foot'?7500:6500, mode: it.mode, url: it.url, qty: 1 })} key="cart">Add to Cart</Button>
                 ]}
               >
                 <Space direction="vertical" size={10}>

@@ -94,7 +94,8 @@ export default function ModelPreview({ url, autoRotate = true, hero = false, mod
         width: '100%',
         height: hero ? 384 : 192,
         overflow: 'hidden',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
+        background: 'linear-gradient(-135deg, #FFFFFF 0%, #B3E1FF 50%,  #2b4acb 100%)',
+        // opacity: 0.49,
         border: '1px solid rgba(124,58,237,0.35)',
         borderRadius: 12
       }}
