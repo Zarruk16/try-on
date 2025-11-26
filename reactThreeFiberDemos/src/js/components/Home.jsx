@@ -105,7 +105,7 @@ export default function Home(){
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }} ref={productsRef}>
         <PreloadGLBs urls={items.map(i => i.url)} />
-        <Typography.Title level={3} style={{ marginBottom: 16 }}>Choose a model</Typography.Title>
+        <Typography.Title level={3} style={{ marginBottom: 16, marginTop: 50 }}>Choose a model</Typography.Title>
         <Row gutter={[16, 24]}>
           {items.map(it => (
             <Col key={it.id} xs={24} sm={12} md={8} xl={6}>
