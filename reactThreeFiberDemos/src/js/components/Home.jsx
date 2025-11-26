@@ -6,6 +6,7 @@ import { Typography, Card, Row, Col, Button, Tag, Space } from 'antd'
 import { EyeOutlined } from '@ant-design/icons'
 import ModelPreview from './ModelPreview'
 import { useCart } from '../store/cart'
+import heroVideo from '../../../assets/video/1126.mp4'
 
 export default function Home(){
   const navigate = useNavigate()
@@ -28,6 +29,7 @@ export default function Home(){
     'converseShoe.glb': 'Converse Shoe',
     'blackShoe.glb': 'Kala Shoe'
   }
+
 
   const wristItems = Object.entries(wristMods)
     .filter(([p]) => !/empty\.glb$/i.test(p) && !/ring/i.test(p) && !/wristPlaceHolder2\.glb/i.test(p))
@@ -68,7 +70,7 @@ export default function Home(){
     <div className="min-h-screen appBg" style={{ color: '#ffffff' }}>
       <div style={{ position: 'relative', height: '100vh', width: '100%' }}>
         <video
-          src={'/assets/video/1126.mp4'}
+          src={heroVideo}
           autoPlay
           loop
           muted
@@ -81,7 +83,14 @@ export default function Home(){
         <div style={{ position: 'absolute', inset: 0 }}>
           <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '100%', padding: '0 24px', textAlign: 'center' }}>
             <Typography.Title level={1} style={{ margin: 0, fontWeight: 800, textAlign: 'center', fontSize: 48 }}>
-              Virtual Try-On of shoes and watch
+              Virtual Try-On of 
+              <span className="flip" style={{ marginLeft: 12 }}>
+                <div>
+                  <div>Shoes</div>
+                  <div>Watch</div>
+                  <div>Sneakers</div>
+                </div>
+              </span>
             </Typography.Title>
             <Typography.Paragraph style={{ fontSize: 16, color: 'rgba(255,255,255,0.85)', textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
               Try sneakers and accessories virtually with interactive 3D previews.
