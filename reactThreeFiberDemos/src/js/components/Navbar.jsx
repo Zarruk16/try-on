@@ -25,10 +25,7 @@ export default function Navbar(){
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
-            <img src="/favicon.png" alt="Logo" style={{ height: 32, width: 32, objectFit: 'contain' }} />
-            <Typography.Text style={{ fontWeight: 800, fontSize: 22, color: '#ffffff' }}>Chrono Stride</Typography.Text>
-          </Link>
+          <Typography.Text style={{ fontWeight: 800, fontSize: 22, color: '#ffffff' }}>Chrono Stride</Typography.Text>
           {isMobile ? (
             <Space size={12}>
               <Link to="/cart">
