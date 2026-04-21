@@ -25,7 +25,7 @@ export default function Navbar(){
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <Typography.Text style={{ fontWeight: 800, fontSize: 22, color: '#ffffff' }}>Chrono Stride</Typography.Text>
+          <Typography.Text style={{ fontWeight: 800, fontSize: 22, color: '#ffffff' }}>Tryon Test</Typography.Text>
           {isMobile ? (
             <Space size={12}>
               <Link to="/cart">

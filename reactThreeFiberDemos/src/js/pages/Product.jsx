@@ -13,7 +13,7 @@ export default function Product(){
   const all = { ...wristMods, ...footMods }
   const entry = Object.entries(all).find(([p]) => p.endsWith(id)) || Object.entries(all)[0]
   const url = entry?.[1]?.default
-  const price = 89.99
+  const price = 7500
 
   const tryOn = (mode) => { navigate('/try/custom', { state: { url, mode } }) }
   const addToCart = () => { add({ id, name: id.replace(/\.glb$/i,''), price, qty: 1 }) }
@@ -26,7 +26,7 @@ export default function Product(){
         </div>
         <div>
           <div className="text-2xl font-semibold mb-2">{id.replace(/\.glb$/i,'')}</div>
-          <div className="text-xl mb-4">${price.toFixed(2)}</div>
+          <div className="text-xl mb-4">₦{price.toFixed(2)}</div>
           <div className="flex gap-3 mb-4">
             <Button type="primary" onClick={()=>tryOn('foot')}>Try on Foot</Button>
             <Button type="primary" onClick={()=>tryOn('wrist')}>Try on Wrist</Button>

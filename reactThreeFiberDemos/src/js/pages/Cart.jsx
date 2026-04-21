@@ -46,7 +46,7 @@ export default function Cart(){
                           title={<Typography.Text strong style={{ color: '#fff' }}>{it.name}</Typography.Text>}
                           description={
                             <Typography.Text style={{ color: 'rgba(255,255,255,0.85)' }}>
-                              ${((it.price || 0)).toFixed(2)} × {(it.qty || 1)} = ${(((it.price || 0) * (it.qty || 1))).toFixed(2)}
+                              ₦{((it.price || 0)).toFixed(2)} × {(it.qty || 1)} = ₦{(((it.price || 0) * (it.qty || 1))).toFixed(2)}
                             </Typography.Text>
                           }
                         />
@@ -61,16 +61,16 @@ export default function Cart(){
                   <Space direction="vertical" style={{ width: '100%' }} size={12}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.85)' }}>
                       <span>Subtotal</span>
-                      <span>${total.toFixed(2)}</span>
+                      <span>₦{total.toFixed(2)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.85)' }}>
                       <span>Estimated Tax</span>
-                      <span>$0.00</span>
+                      <span>₦0.00</span>
                     </div>
                     <Divider style={{ margin: '8px 0' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
                       <span>Total</span>
-                      <span>${total.toFixed(2)}</span>
+                      <span>₦{total.toFixed(2)}</span>
                     </div>
                     <Button type="primary" size="large" disabled={!hasItems} onClick={() => navigate('/checkout')}>Checkout</Button>
                     <Button size="large" disabled={!hasItems} onClick={clearCart}>Clear Cart</Button>

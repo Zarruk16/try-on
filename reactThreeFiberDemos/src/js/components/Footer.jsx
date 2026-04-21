@@ -6,7 +6,7 @@ export default function Footer(){
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <Row gutter={[24, 24]}>
           <Col xs={24} md={12}>
-            <Typography.Title level={4} style={{ marginBottom: 8 }}>Chrono Stride</Typography.Title>
+            <Typography.Title level={4} style={{ marginBottom: 8 }}>Try-on Test</Typography.Title>
             <Typography.Paragraph style={{ maxWidth: 480 }}>
               Experience the future of online shopping with our virtual try-on experience.
             </Typography.Paragraph>
@@ -32,7 +32,7 @@ export default function Footer(){
         </Row>
         <div style={{ borderTop: '1px solid #202020', marginTop: 24, paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography.Text>
-            © 2024 Chrono Stride. All rights reserved.
+            © 2026 Zarruk Code. All rights reserved.
           </Typography.Text>
           <Space size={16}>
             <Typography.Link href="#">Privacy Policy</Typography.Link>

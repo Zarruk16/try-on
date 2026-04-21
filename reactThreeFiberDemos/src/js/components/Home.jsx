@@ -121,7 +121,7 @@ export default function Home(){
                 <Space direction="vertical" size={10}>
                   <div>
                     <Typography.Text style={{ fontSize: 22, fontWeight: 700 }} ellipsis>{it.displayName}</Typography.Text>
-                    <div className="text-lg font-bold text-white mt-1">৳{(it.mode==='foot'?7500:6500).toLocaleString()}</div>
+                    <div className="text-lg font-bold text-white mt-1">₦{(it.mode==='foot'?7500:6500).toLocaleString()}</div>
                   </div>
                   <Tag color={it.mode === 'wrist' ? 'cyan' : 'purple'}>{it.mode}</Tag>
                 </Space>
