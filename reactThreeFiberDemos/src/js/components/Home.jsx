@@ -6,6 +6,7 @@ import { Typography, Card, Row, Col, Button, Tag, Space } from 'antd'
 import { EyeOutlined } from '@ant-design/icons'
 import ModelPreview from './ModelPreview'
 import { useCart } from '../store/cart'
+import { getVideoAsset } from '../utils/assetPaths'
 import heroVideo from '../../../assets/video/1126.mp4'
 
 export default function Home(){

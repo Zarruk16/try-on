@@ -1,16 +1,24 @@
 import { useCart } from '../store/cart'
-import { Typography, List, Card, Button, Divider, Space, InputNumber, Empty, Row, Col, Layout } from 'antd'
+import { Typography, List, Card, Button, Divider, Space, InputNumber, Empty, Row, Col, Layout, message } from 'antd'
 import { Link, useNavigate } from 'react-router-dom'
 
 export default function Cart(){
   const navigate = useNavigate()
-  const { items, remove, total, setItems } = useCart()
-  const changeQty = (idx, qty) => {
-    const q = Math.max(1, Number(qty || 1))
-    setItems(prev => prev.map((it, i) => i === idx ? { ...it, qty: q } : it))
-  }
-  const clearCart = () => { setItems([]) }
+  const { items, remove, total, clear, updateQuantity } = useCart()
   const hasItems = items.length > 0
+
+  const handleCheckout = () => {
+    if (!hasItems) {
+      message.warning('Your cart is empty. Add items before checkout.')
+      return
+    }
+    navigate('/checkout')
+  }
+
+  const handleClearCart = () => {
+    clear()
+    message.success('Cart cleared successfully')
+  }
   return (
     <Layout style={{ minHeight: '100vh', background: 'transparent', color: '#fff' }}>
       <Layout.Content>
@@ -37,7 +45,7 @@ export default function Cart(){
                         actions={[
                           <Space key="qty">
                             <span style={{ color: 'rgba(255,255,255,0.85)' }}>Qty</span>
-                            <InputNumber min={1} value={it.qty || 1} onChange={(v) => changeQty(idx, v)} />
+                            <InputNumber min={1} value={it.qty || 1} onChange={(v) => updateQuantity(idx, v)} />
                           </Space>,
                           <Button danger onClick={() => remove(idx)} key="remove">Remove</Button>
                         ]}
@@ -72,8 +80,8 @@ export default function Cart(){
                       <span>Total</span>
                       <span>₦{total.toFixed(2)}</span>
                     </div>
-                    <Button type="primary" size="large" disabled={!hasItems} onClick={() => navigate('/checkout')}>Checkout</Button>
-                    <Button size="large" disabled={!hasItems} onClick={clearCart}>Clear Cart</Button>
+                    <Button type="primary" size="large" disabled={!hasItems} onClick={handleCheckout}>Checkout</Button>
+                    <Button size="large" disabled={!hasItems} onClick={handleClearCart}>Clear Cart</Button>
                   </Space>
                 </Card>
               </Col>

@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from 'antd'
 import ModelPreview from '../components/ModelPreview'
 import { useCart } from '../store/cart'
+import { getVTOAsset, getBareFootVTOAsset } from '../utils/assetPaths'
 
 export default function Product(){
   const { id } = useParams()
