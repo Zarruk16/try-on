@@ -154,11 +154,11 @@ export default function TryOn(){
     const poseFilter = PoseFlipFilter.instance({})
     const spec = isFoot ? {
       poseLandmarksLabels: [ 'ankleBack', 'ankleOut', 'ankleIn', 'ankleFront', 'heelBackOut', 'heelBackIn', 'pinkyToeBaseTop', 'middleToeBaseTop', 'bigToeBaseTop' ],
-      poseFilter, enableFlipObject: true, cameraZoom: 1, freeZRot: false, threshold: 0.55,
+      poseFilter, enableFlipObject: true, cameraZoom: 1, freeZRot: false, threshold: 0.45,
       scanSettings: {
-        multiDetectionSearchSlotsRate: 0.5, multiDetectionMaxOverlap: 0.3, multiDetectionOverlapScaleXY: [0.5,1], multiDetectionEqualizeSearchSlotScale: true, multiDetectionForceSearchOnOtherSide: true, multiDetectionForceChirality: 1, disableIsRightHandNNEval: true, overlapFactors: [1.0,1.0,1.0], translationScalingFactors: [0.3,0.3,1.0], nScaleLevels: 2, scale0Factor: 0.5
+        multiDetectionSearchSlotsRate: 0.6, multiDetectionMaxOverlap: 0.35, multiDetectionOverlapScaleXY: [0.6,1.1], multiDetectionEqualizeSearchSlotScale: true, multiDetectionForceSearchOnOtherSide: true, disableIsRightHandNNEval: true, overlapFactors: [1.0,1.0,1.0], translationScalingFactors: [0.35,0.35,1.0], nScaleLevels: 3, scale0Factor: 0.8
       },
-      handTrackerCanvas: canvasVideoRef.current, debugDisplayLandmarks: false, NNs: [NNFoot], maxHandsDetected: 2,
+      handTrackerCanvas: canvasVideoRef.current, debugDisplayLandmarks: false, NNs: [NNFoot], maxHandsDetected: 1,
       stabilizationSettings: { NNSwitchMask: { isRightHand: false, isFlipped: false } },
       landmarksStabilizerSpec: { minCutOff: 0.001, beta: 1 }
     } : {
