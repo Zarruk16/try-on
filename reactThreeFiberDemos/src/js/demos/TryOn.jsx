@@ -21,9 +21,9 @@ import Stabilizer from '../contrib/WebARRocksHand/helpers/landmarksStabilizers/O
 const CUSTOM_MODEL_POSE_OVERRIDES = {
   // model2.glb has a different pivot/orientation than the rest of foot assets.
   'model2.glb': {
-    scale: 2.0,
-    translation: [0, -0.02, -0.065],
-    quaternion: [0.707, 0, 0, 0.707]
+    // keep neutral orientation; only apply a mild size/offset correction
+    scale: 0.9,
+    translation: [0, 0.02, -0.03]
   }
 }
 
@@ -154,7 +154,7 @@ export default function TryOn(){
     const poseFilter = PoseFlipFilter.instance({})
     const spec = isFoot ? {
       poseLandmarksLabels: [ 'ankleBack', 'ankleOut', 'ankleIn', 'ankleFront', 'heelBackOut', 'heelBackIn', 'pinkyToeBaseTop', 'middleToeBaseTop', 'bigToeBaseTop' ],
-      poseFilter, enableFlipObject: true, cameraZoom: 1, freeZRot: false, threshold: 0.6,
+      poseFilter, enableFlipObject: true, cameraZoom: 1, freeZRot: false, threshold: 0.55,
       scanSettings: {
         multiDetectionSearchSlotsRate: 0.5, multiDetectionMaxOverlap: 0.3, multiDetectionOverlapScaleXY: [0.5,1], multiDetectionEqualizeSearchSlotScale: true, multiDetectionForceSearchOnOtherSide: true, multiDetectionForceChirality: 1, disableIsRightHandNNEval: true, overlapFactors: [1.0,1.0,1.0], translationScalingFactors: [0.3,0.3,1.0], nScaleLevels: 2, scale0Factor: 0.5
       },
