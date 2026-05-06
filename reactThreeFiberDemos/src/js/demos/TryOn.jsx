@@ -86,6 +86,7 @@ const VTOModelContainer = (props) => {
   if (props.pose.scale){ const s = props.pose.scale; modelScene.scale.set(s, s, s) }
   if (props.pose.translation){ modelScene.position.add(new Vector3().fromArray(props.pose.translation)) }
   if (props.pose.quaternion){ modelScene.quaternion.fromArray(props.pose.quaternion) }
+  if (props.flipModelFront){ modelScene.rotateX(-Math.PI / 2) }
   // if (props.mode === 'wrist'){
   //   modelScene.rotateY(Math.PI )
   // }
@@ -127,6 +128,7 @@ export default function TryOn(){
 
   const customURL = location.state?.url || ''
   const customFileName = customURL.split('?')[0].split('#')[0].split('/').pop()
+  const shouldFlipModelFront = customFileName?.toLowerCase() === 'model2.glb'
   const customPoseOverride = CUSTOM_MODEL_POSE_OVERRIDES[customFileName]
   const defaultCustomPose = (location.state?.mode === 'foot')
     ? { scale: 1.2, translation: [0,0.01,-0.02] }
@@ -207,7 +209,7 @@ export default function TryOn(){
       <Canvas className={mirrorClass} style={{ position: 'fixed', zIndex: 2, ...sizing }} dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <ThreeGrabber sizing={sizing} />
         <Suspense fallback={null}>
-          <VTOModelContainer GLTFModel={selectedModel.gltf} occluder={selectedModel.occluder} pose={pose} mode={selectedModel.type} />
+          <VTOModelContainer GLTFModel={selectedModel.gltf} occluder={selectedModel.occluder} pose={pose} mode={selectedModel.type} flipModelFront={shouldFlipModelFront} />
         </Suspense>
         <hemisphereLight args={[0xffffff, 0x444444, 0.6]} />
         <directionalLight color={0xffffff} intensity={1.2} position={[0,120,120]} />
