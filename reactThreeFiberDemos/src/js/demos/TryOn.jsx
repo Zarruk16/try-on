@@ -18,6 +18,15 @@ import VTOThreeHelper from '../contrib/WebARRocksHand/helpers/HandTrackerThreeHe
 import PoseFlipFilter from '../contrib/WebARRocksHand/helpers/PoseFlipFilter.js'
 import Stabilizer from '../contrib/WebARRocksHand/helpers/landmarksStabilizers/OneEuroLMStabilizer.js'
 
+const CUSTOM_MODEL_POSE_OVERRIDES = {
+  // model2.glb has a different pivot/orientation than the rest of foot assets.
+  'model2.glb': {
+    scale: 2.0,
+    translation: [0, -0.02, -0.065],
+    quaternion: [0.707, 0, 0, 0.707]
+  }
+}
+
 const ThreeGrabber = (props) => {
   const threeFiber = useThree()
   const threeRenderer = threeFiber.gl
@@ -116,10 +125,17 @@ export default function TryOn(){
   const { modelId } = useParams()
   const location = useLocation()
 
+  const customURL = location.state?.url || ''
+  const customFileName = customURL.split('?')[0].split('#')[0].split('/').pop()
+  const customPoseOverride = CUSTOM_MODEL_POSE_OVERRIDES[customFileName]
+  const defaultCustomPose = (location.state?.mode === 'foot')
+    ? { scale: 1.2, translation: [0,0.01,-0.02] }
+    : { scale: 1.35 * 1.462, translation: [0.076,-0.916,-0.504], quaternion: [0,0,0,1] }
+
   const selectedModel = (modelId === 'custom' && location.state) ? {
     id: 'custom', name: 'Custom Model', type: location.state.mode,
     gltf: location.state.url, occluder: (location.state.mode === 'foot') ? { type: 'MODEL', model: GLTFOccluderFoot, scale: 1 } : { type: 'SOFTCYLINDER', radiusRange: [3.5,4.5], height: 48, offset: [0,0,0], quaternion: [0.707,0,0,0.707] },
-    pose: (location.state.mode === 'foot') ? { scale: 1.2, translation: [0,0.01,-0.02] } : { scale: 1.35 * 1.462, translation: [0.076,-0.916,-0.504], quaternion: [0,0,0,1] }
+    pose: customPoseOverride || defaultCustomPose
   } : findModelById(modelId)
 
   const [sizing, setSizing] = useState(compute_sizing())
